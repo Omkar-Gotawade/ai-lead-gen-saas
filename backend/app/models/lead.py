@@ -1,5 +1,5 @@
 """Lead model for storing lead information."""
-from sqlalchemy import Column, String, DateTime, Text
+from sqlalchemy import Column, String, DateTime, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 import uuid
@@ -23,6 +23,12 @@ class Lead(Base):
     phone = Column(String(50), nullable=True)
     source = Column(String(100), nullable=True)  # e.g., "csv_upload", "manual", "api"
     enriched_data = Column(JSONB, nullable=True)  # Store enrichment data as JSON
+    
+    # Week 3: Bounce and do-not-contact tracking
+    do_not_contact = Column(Boolean, default=False, nullable=False, index=True)
+    bounce_reason = Column(String(255), nullable=True)
+    bounced_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     def __repr__(self):

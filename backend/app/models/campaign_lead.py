@@ -28,5 +28,10 @@ class CampaignLead(Base):
     last_step_index = Column(Integer, default=0, nullable=False)
     last_sent_at = Column(DateTime, nullable=True)
     
+    # Reply tracking (Week 3)
+    replied_at = Column(DateTime, nullable=True)
+    reply_message_id = Column(String(255), nullable=True)
+    stop_reason = Column(String(100), nullable=True)  # reply_received|bounced|unsubscribed|manual
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
