@@ -6,6 +6,7 @@ from .email_provider import router as email_provider_router
 from .email_send import router as email_send_router
 from .campaigns import router as campaigns_router
 from .sequence_steps import router as sequence_steps_router
+from .lead_discovery import router as lead_discovery_router
 
 __all__ = [
     "auth_router",
@@ -14,5 +15,6 @@ __all__ = [
     "email_provider_router",
     "email_send_router",
     "campaigns_router",
-    "sequence_steps_router"
+    "sequence_steps_router",
+    "lead_discovery_router"
 ]

@@ -1,9 +1,38 @@
+# Environment files
 .env
+.env.local
+.env.production
+
+# Python
 *.pyc
 __pycache__/
 *.log
-.DS_Store
 venv/
+*.db
+*.sqlite
+
+# Node
 node_modules/
 dist/
+
+# OS
+.DS_Store
+
+# Database
 postgres_data/
+
+# Sensitive config scripts (contain hardcoded credentials)
+setup_smtp.py
+configure_email.py
+
+# Docker volumes
+postgres_data/
+
+# IDE
+.vscode/
+.idea/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+

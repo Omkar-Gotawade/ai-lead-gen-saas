@@ -2,6 +2,7 @@
 from typing import Optional
 from uuid import UUID
 from datetime import datetime, timedelta
+import asyncio
 from app.celery_app import celery_app
 from app.database import SessionLocal
 from app.models.campaign import Campaign
@@ -9,6 +10,68 @@ from app.models.campaign_lead import CampaignLead, CampaignLeadStatus
 from app.models.sequence_step import SequenceStep
 from app.models.lead import Lead
 from app.workers.email_worker import send_email_task
+from app.services.ai_email_service import generate_email
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@celery_app.task(name="check_pending_campaigns")
+def check_pending_campaigns():
+    """
+    Periodic task to check for campaign leads that need to be processed.
+    This runs every minute via Celery Beat.
+    """
+    db = SessionLocal()
+    
+    try:
+        now = datetime.utcnow()
+        
+        # Find all campaign leads that are ready to send
+        pending_leads = db.query(CampaignLead).filter(
+            CampaignLead.status.in_([
+                CampaignLeadStatus.PENDING.value,
+                CampaignLeadStatus.IN_PROGRESS.value
+            ]),
+            CampaignLead.next_run_at <= now
+        ).all()
+        
+        print(f"Found {len(pending_leads)} campaign leads ready to process")
+        
+        for campaign_lead in pending_leads:
+            # Check if campaign is still active
+            campaign = db.query(Campaign).filter(
+                Campaign.id == campaign_lead.campaign_id,
+                Campaign.status == 'active'
+            ).first()
+            
+            if not campaign:
+                print(f"Campaign {campaign_lead.campaign_id} not active, skipping")
+                continue
+            
+            # Determine which step to run
+            if campaign_lead.status == CampaignLeadStatus.PENDING.value:
+                step_index = 1  # Start from first step
+            else:
+                step_index = campaign_lead.last_step_index + 1
+            
+            print(f"Triggering step {step_index} for campaign_lead {campaign_lead.id}")
+            
+            # Trigger the sequence step
+            run_sequence_step.delay(str(campaign_lead.id), step_index)
+            
+            # Update next_run_at to prevent duplicate triggering
+            campaign_lead.next_run_at = now + timedelta(days=999)
+            
+        db.commit()
+        
+    except Exception as e:
+        print(f"Error in check_pending_campaigns: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+    finally:
+        db.close()
 
 
 def render_template(template: str, lead: Lead) -> str:
@@ -56,8 +119,16 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             print(f"CampaignLead {campaign_lead_id} not found")
             return
         
+        # Week 3: Check if campaign lead is stopped or replied
         if campaign_lead.status == CampaignLeadStatus.STOPPED.value:
-            print(f"CampaignLead {campaign_lead_id} is stopped")
+            print(f"CampaignLead {campaign_lead_id} is stopped: {campaign_lead.stop_reason}")
+            return
+        
+        if campaign_lead.replied_at is not None:
+            print(f"CampaignLead {campaign_lead_id} has replied, stopping sequence")
+            campaign_lead.status = CampaignLeadStatus.STOPPED.value
+            campaign_lead.stop_reason = 'reply_received'
+            db.commit()
             return
         
         # Load campaign
@@ -91,9 +162,47 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             print(f"Lead {campaign_lead.lead_id} not found")
             return
         
-        # Render email templates
-        subject = render_template(step.subject_template, lead)
-        body = render_template(step.body_template, lead)
+        # Week 3: Check if lead is marked do_not_contact
+        if lead.do_not_contact:
+            print(f"Lead {lead.id} is marked do_not_contact, stopping campaign")
+            campaign_lead.status = CampaignLeadStatus.STOPPED.value
+            campaign_lead.stop_reason = 'do_not_contact'
+            db.commit()
+            return
+        
+        # Generate email content (AI or template)
+        if step.use_ai_generation and step.product_description:
+            try:
+                logger.info(f"Generating AI email for lead {lead.id} using tone={step.ai_tone}, goal={step.ai_goal}")
+                
+                # Generate personalized email using AI (run async function in sync context)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    generated = loop.run_until_complete(generate_email(
+                        lead=lead,
+                        tone=step.ai_tone or 'professional',
+                        goal=step.ai_goal or 'schedule a meeting',
+                        product_description=step.product_description
+                    ))
+                finally:
+                    loop.close()
+                
+                # Extract subject and body from GeneratedEmail object
+                subject = generated.subject
+                body = generated.body
+                
+                logger.info(f"AI generated email for {lead.email}: subject='{subject[:50]}...'")
+                
+            except Exception as e:
+                logger.error(f"AI generation failed for lead {lead.id}: {e}. Falling back to templates.")
+                # Fallback to templates if AI fails
+                subject = render_template(step.subject_template, lead)
+                body = render_template(step.body_template, lead)
+        else:
+            # Use template rendering (original behavior)
+            subject = render_template(step.subject_template, lead)
+            body = render_template(step.body_template, lead)
         
         # Send email
         send_email_task.delay(

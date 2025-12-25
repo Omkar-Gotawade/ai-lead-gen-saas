@@ -30,10 +30,14 @@ def send_email_task(
     db = SessionLocal()
     
     try:
-        # Get user's email provider settings
+        # Get user's email provider settings (fallback to any provider if user doesn't have one)
         provider = db.query(EmailProviderSettings).filter(
             EmailProviderSettings.user_id == UUID(user_id)
         ).first()
+        
+        # Fallback to any configured provider
+        if not provider:
+            provider = db.query(EmailProviderSettings).first()
         
         if not provider:
             raise Exception("Email provider not configured")

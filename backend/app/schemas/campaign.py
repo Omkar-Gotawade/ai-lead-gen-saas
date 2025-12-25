@@ -11,6 +11,10 @@ class SequenceStepBase(BaseModel):
     delay_days: int = 0
     subject_template: str
     body_template: str
+    use_ai_generation: bool = False
+    ai_tone: Optional[str] = 'professional'
+    ai_goal: Optional[str] = 'schedule a meeting'
+    product_description: Optional[str] = None
 
 
 class SequenceStepCreate(SequenceStepBase):
@@ -24,6 +28,10 @@ class SequenceStepUpdate(BaseModel):
     delay_days: Optional[int] = None
     subject_template: Optional[str] = None
     body_template: Optional[str] = None
+    use_ai_generation: Optional[bool] = None
+    ai_tone: Optional[str] = None
+    ai_goal: Optional[str] = None
+    product_description: Optional[str] = None
 
 
 class SequenceStepResponse(SequenceStepBase):

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCampaigns, createCampaign, deleteCampaign } from '../api/campaigns';
+import { getCampaigns, createCampaign, deleteCampaign, activateCampaign, pauseCampaign } from '../api/campaigns';
 
 function Campaigns() {
   const navigate = useNavigate();
@@ -77,6 +77,22 @@ function Campaigns() {
 
   const handleEditCampaign = (campaignId) => {
     navigate(`/campaigns/${campaignId}`);
+  };
+
+  const handleToggleCampaignStatus = async (campaign) => {
+    try {
+      if (campaign.status === 'active') {
+        await pauseCampaign(campaign.id);
+        alert('Campaign paused successfully');
+      } else {
+        await activateCampaign(campaign.id);
+        alert('Campaign activated successfully');
+      }
+      await fetchCampaigns();
+    } catch (err) {
+      console.error('Error updating campaign status:', err);
+      alert('Failed to update campaign status');
+    }
   };
 
   const getStatusColor = (status) => {
@@ -182,6 +198,9 @@ function Campaigns() {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Campaign Control
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Created
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -202,6 +221,27 @@ function Campaigns() {
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(campaign.status)}`}>
                         {campaign.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {campaign.status === 'draft' || campaign.status === 'paused' ? (
+                        <button
+                          onClick={() => handleToggleCampaignStatus(campaign)}
+                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 font-medium"
+                          title="Activate Campaign"
+                        >
+                          Activate
+                        </button>
+                      ) : campaign.status === 'active' ? (
+                        <button
+                          onClick={() => handleToggleCampaignStatus(campaign)}
+                          className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 font-medium"
+                          title="Pause Campaign"
+                        >
+                          Pause
+                        </button>
+                      ) : (
+                        <span className="text-sm text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {new Date(campaign.created_at).toLocaleDateString()}

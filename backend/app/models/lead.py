@@ -24,6 +24,13 @@ class Lead(Base):
     source = Column(String(100), nullable=True)  # e.g., "csv_upload", "manual", "api"
     enriched_data = Column(JSONB, nullable=True)  # Store enrichment data as JSON
     
+    # v1: LinkedIn enrichment fields
+    linkedin_url = Column(String(500), nullable=True)
+    job_title = Column(String(255), nullable=True)
+    seniority = Column(String(100), nullable=True)  # e.g., "Senior", "Manager", "Director"
+    company_size = Column(String(100), nullable=True)  # e.g., "1-10", "11-50", "51-200"
+    linkedin_headline = Column(String(500), nullable=True)
+    
     # Week 3: Bounce and do-not-contact tracking
     do_not_contact = Column(Boolean, default=False, nullable=False, index=True)
     bounce_reason = Column(String(255), nullable=True)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { leadsAPI } from '../api'
+import { getEmailProvider } from '../api/email'
 import CreateLeadModal from '../components/CreateLeadModal'
 import EditLeadModal from '../components/EditLeadModal'
 import DeleteLeadModal from '../components/DeleteLeadModal'
@@ -14,6 +15,7 @@ const Leads = () => {
   const [pageSize] = useState(50)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [emailProviderConfigured, setEmailProviderConfigured] = useState(false)
   
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -27,6 +29,7 @@ const Leads = () => {
 
   useEffect(() => {
     fetchLeads()
+    checkEmailProvider()
   }, [page])
 
   const fetchLeads = async () => {
@@ -40,6 +43,15 @@ const Leads = () => {
       setError('Failed to fetch leads')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkEmailProvider = async () => {
+    try {
+      await getEmailProvider()
+      setEmailProviderConfigured(true)
+    } catch (err) {
+      setEmailProviderConfigured(false)
     }
   }
 
@@ -338,6 +350,7 @@ const Leads = () => {
       {showComposer && selectedLead && (
         <EmailComposer
           lead={selectedLead}
+          emailProviderConfigured={emailProviderConfigured}
           onClose={() => {
             setShowComposer(false)
             setSelectedLead(null)

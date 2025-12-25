@@ -10,6 +10,7 @@ from app.database import Base
 
 class CampaignLeadStatus(str, enum.Enum):
     """Campaign lead status."""
+    PENDING = "pending"
     QUEUED = "queued"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -24,9 +25,11 @@ class CampaignLead(Base):
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True)
     lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    status = Column(String, default=CampaignLeadStatus.QUEUED.value, nullable=False)
-    last_step_index = Column(Integer, default=0, nullable=False)
+    status = Column(String, default=CampaignLeadStatus.PENDING.value, nullable=False)
+    current_step_index = Column(Integer, default=0, nullable=False)  # Current step being processed
+    last_step_index = Column(Integer, default=0, nullable=False)  # Last successfully sent step
     last_sent_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)  # When to run next step
     
     # Reply tracking (Week 3)
     replied_at = Column(DateTime, nullable=True)

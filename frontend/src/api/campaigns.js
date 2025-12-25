@@ -49,3 +49,27 @@ export const enqueueLeadsToCampaign = async (campaignId, leadIds) => {
   });
   return response.data;
 };
+
+/**
+ * Activate a campaign - sets status to active and schedules all pending leads
+ */
+export const activateCampaign = async (campaignId) => {
+  const response = await api.post(`/api/${campaignId}/activate`);
+  return response.data;
+};
+
+/**
+ * Pause a campaign - sets status to paused
+ */
+export const pauseCampaign = async (campaignId) => {
+  const response = await api.post(`/api/${campaignId}/pause`);
+  return response.data;
+};
+
+/**
+ * Get enrolled leads for a campaign
+ */
+export const getCampaignLeads = async (campaignId) => {
+  const response = await api.get(`/api/campaigns/${campaignId}/leads`);
+  return response.data;
+};

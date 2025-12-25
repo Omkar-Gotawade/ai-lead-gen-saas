@@ -1,5 +1,5 @@
 """Sequence step model for campaign steps."""
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -19,6 +19,15 @@ class SequenceStep(Base):
     
     subject_template = Column(String, nullable=False)
     body_template = Column(String, nullable=False)
+    
+    # Week 3: Stop-on-reply behavior
+    stop_on_reply = Column(Boolean, default=True, nullable=False)
+    
+    # AI-powered personalization
+    use_ai_generation = Column(Boolean, default=False, nullable=False)
+    ai_tone = Column(String, default='professional', nullable=True)  # professional, friendly, casual, aggressive
+    ai_goal = Column(String, default='schedule a meeting', nullable=True)  # schedule a meeting, book a demo, get a reply
+    product_description = Column(String, nullable=True)  # What are we selling/offering
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

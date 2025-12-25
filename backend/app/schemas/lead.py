@@ -12,6 +12,10 @@ class LeadCreate(BaseModel):
     email: EmailStr
     company: Optional[str] = None
     source: Optional[str] = "manual"
+    linkedin_url: Optional[str] = None
+    job_title: Optional[str] = None
+    seniority: Optional[str] = None
+    company_size: Optional[str] = None
 
 
 class LeadUpdate(BaseModel):
@@ -21,6 +25,10 @@ class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
     company: Optional[str] = None
     source: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    job_title: Optional[str] = None
+    seniority: Optional[str] = None
+    company_size: Optional[str] = None
 
 
 class LeadResponse(BaseModel):
@@ -34,6 +42,11 @@ class LeadResponse(BaseModel):
     company: Optional[str] = None
     source: Optional[str] = None
     enriched_data: Optional[Dict[str, Any]] = None
+    linkedin_url: Optional[str] = None
+    job_title: Optional[str] = None
+    seniority: Optional[str] = None
+    company_size: Optional[str] = None
+    linkedin_headline: Optional[str] = None
     created_at: datetime
     
     class Config:

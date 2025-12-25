@@ -84,7 +84,11 @@ async def create_sequence_step(
         step_index=step.step_index,
         delay_days=step.delay_days,
         subject_template=step.subject_template,
-        body_template=step.body_template
+        body_template=step.body_template,
+        use_ai_generation=step.use_ai_generation,
+        ai_tone=step.ai_tone,
+        ai_goal=step.ai_goal,
+        product_description=step.product_description
     )
     
     db.add(db_step)
@@ -138,6 +142,14 @@ async def update_sequence_step(
         step.subject_template = step_update.subject_template
     if step_update.body_template is not None:
         step.body_template = step_update.body_template
+    if step_update.use_ai_generation is not None:
+        step.use_ai_generation = step_update.use_ai_generation
+    if step_update.ai_tone is not None:
+        step.ai_tone = step_update.ai_tone
+    if step_update.ai_goal is not None:
+        step.ai_goal = step_update.ai_goal
+    if step_update.product_description is not None:
+        step.product_description = step_update.product_description
     
     db.commit()
     db.refresh(step)

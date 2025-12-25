@@ -6,6 +6,10 @@ const CreateLeadModal = ({ isOpen, onClose, onSubmit }) => {
     last_name: '',
     email: '',
     company: '',
+    linkedin_url: '',
+    job_title: '',
+    seniority: '',
+    company_size: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,6 +33,10 @@ const CreateLeadModal = ({ isOpen, onClose, onSubmit }) => {
         last_name: '',
         email: '',
         company: '',
+        linkedin_url: '',
+        job_title: '',
+        seniority: '',
+        company_size: '',
       })
     } catch (err) {
       setError(err.message)
@@ -108,6 +116,74 @@ const CreateLeadModal = ({ isOpen, onClose, onSubmit }) => {
                     value={formData.company}
                     onChange={handleChange}
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    LinkedIn URL (optional)
+                  </label>
+                  <input
+                    type="url"
+                    name="linkedin_url"
+                    placeholder="https://linkedin.com/in/username"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={formData.linkedin_url}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Job Title (optional)
+                  </label>
+                  <input
+                    type="text"
+                    name="job_title"
+                    placeholder="e.g., Senior Marketing Manager"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={formData.job_title}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Seniority (optional)
+                    </label>
+                    <select
+                      name="seniority"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      value={formData.seniority}
+                      onChange={handleChange}
+                    >
+                      <option value="">Select...</option>
+                      <option value="Entry">Entry</option>
+                      <option value="Mid">Mid</option>
+                      <option value="Senior">Senior</option>
+                      <option value="Manager">Manager</option>
+                      <option value="Director">Director</option>
+                      <option value="VP">VP</option>
+                      <option value="C-Level">C-Level</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Company Size (optional)
+                    </label>
+                    <select
+                      name="company_size"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      value={formData.company_size}
+                      onChange={handleChange}
+                    >
+                      <option value="">Select...</option>
+                      <option value="1-10">1-10</option>
+                      <option value="11-50">11-50</option>
+                      <option value="51-200">51-200</option>
+                      <option value="201-500">201-500</option>
+                      <option value="501-1000">501-1000</option>
+                      <option value="1001-5000">1001-5000</option>
+                      <option value="5000+">5000+</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">

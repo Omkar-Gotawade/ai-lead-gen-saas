@@ -9,8 +9,13 @@ from app.routes import (
     email_provider_router,
     email_send_router,
     campaigns_router,
-    sequence_steps_router
+    sequence_steps_router,
+    lead_discovery_router
 )
+from app.routes.webhooks import router as webhooks_router
+from app.routes.metrics import router as metrics_router
+from app.routes.deliverability import router as deliverability_router
+from app.middleware import RateLimitMiddleware
 from app.database import engine, Base
 
 # Create database tables
@@ -26,11 +31,14 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://frontend:5173"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add rate limiting (60 requests per minute per IP)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 
 # Include routers
 app.include_router(auth_router)
@@ -40,6 +48,10 @@ app.include_router(email_provider_router, prefix="/api", tags=["email_provider"]
 app.include_router(email_send_router, prefix="/api", tags=["email_send"])
 app.include_router(campaigns_router, prefix="/api", tags=["campaigns"])
 app.include_router(sequence_steps_router, prefix="/api", tags=["sequence_steps"])
+app.include_router(webhooks_router, prefix="/api", tags=["webhooks"])
+app.include_router(metrics_router, prefix="/api", tags=["metrics"])
+app.include_router(deliverability_router, prefix="/api", tags=["deliverability"])
+app.include_router(lead_discovery_router, tags=["lead_discovery"])
 
 
 @app.get("/")

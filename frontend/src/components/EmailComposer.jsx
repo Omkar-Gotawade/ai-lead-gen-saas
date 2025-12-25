@@ -41,11 +41,6 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
       return;
     }
 
-    if (!emailProviderConfigured) {
-      setError('Please configure email provider in Settings first');
-      return;
-    }
-
     setLoadingSend(true);
     setError('');
     

@@ -249,6 +249,7 @@ async def enqueue_leads_to_campaign(
         )
     
     enqueued_count = 0
+    from datetime import datetime
     
     for lead_id in request.lead_ids:
         # Check if lead is already in this campaign
@@ -261,28 +262,158 @@ async def enqueue_leads_to_campaign(
             # Skip if already enrolled
             continue
         
-        # Create CampaignLead record
+        # Create CampaignLead record with next_run_at set to now
         campaign_lead = CampaignLead(
             campaign_id=campaign_id,
             lead_id=lead_id,
-            status="queued",
-            last_step_index=0
+            status=CampaignLeadStatus.PENDING.value,
+            current_step_index=0,
+            last_step_index=0,
+            next_run_at=datetime.utcnow()  # Set to trigger immediately
         )
         db.add(campaign_lead)
-        db.commit()
-        db.refresh(campaign_lead)
-        
-        # Queue first step (step_index 1) immediately
-        from app.workers.campaign_worker import run_sequence_step
-        run_sequence_step.delay(
-            campaign_lead_id=str(campaign_lead.id),
-            step_index=1
-        )
         
         enqueued_count += 1
+    
+    db.commit()
     
     return {
         "message": f"Successfully enqueued {enqueued_count} lead(s) to campaign",
         "enqueued_count": enqueued_count,
         "skipped_count": len(request.lead_ids) - enqueued_count
     }
+
+
+@router.post("/{campaign_id}/activate")
+async def activate_campaign(
+    campaign_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)]
+):
+    """
+    Activate a campaign and trigger sending for all enrolled leads.
+    
+    Args:
+        campaign_id: Campaign ID
+        current_user: Authenticated user
+        db: Database session
+        
+    Returns:
+        Success message
+    """
+    from datetime import datetime
+    
+    # Verify campaign exists and belongs to user
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.user_id == current_user.id
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Update campaign status
+    campaign.status = CampaignStatus.ACTIVE
+    
+    # Set next_run_at for all pending/in_progress leads to now
+    now = datetime.utcnow()
+    db.query(CampaignLead).filter(
+        CampaignLead.campaign_id == campaign_id,
+        CampaignLead.status.in_([
+            CampaignLeadStatus.PENDING.value,
+            CampaignLeadStatus.IN_PROGRESS.value
+        ])
+    ).update({
+        "next_run_at": now
+    }, synchronize_session=False)
+    
+    db.commit()
+    
+    return {"message": "Campaign activated successfully"}
+
+
+@router.post("/{campaign_id}/pause")
+async def pause_campaign(
+    campaign_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)]
+):
+    """
+    Pause a campaign.
+    
+    Args:
+        campaign_id: Campaign ID
+        current_user: Authenticated user
+        db: Database session
+        
+    Returns:
+        Success message
+    """
+    # Verify campaign exists and belongs to user
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.user_id == current_user.id
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Update campaign status
+    campaign.status = CampaignStatus.PAUSED
+    db.commit()
+    
+    return {"message": "Campaign paused successfully"}
+
+
+@router.get("/campaigns/{campaign_id}/leads")
+async def get_campaign_leads(
+    campaign_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all enrolled leads for a campaign.
+    
+    Args:
+        campaign_id: Campaign ID
+        current_user: Authenticated user
+        db: Database session
+        
+    Returns:
+        List of enrolled leads with their campaign status
+    """
+    # Verify campaign exists and belongs to user
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.user_id == current_user.id
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Get campaign leads with lead details
+    campaign_leads = db.query(CampaignLead, Lead).join(
+        Lead, CampaignLead.lead_id == Lead.id
+    ).filter(
+        CampaignLead.campaign_id == campaign_id
+    ).order_by(CampaignLead.created_at.desc()).all()
+    
+    result = []
+    for campaign_lead, lead in campaign_leads:
+        result.append({
+            "id": str(campaign_lead.id),
+            "lead_id": str(lead.id),
+            "email": lead.email,
+            "first_name": lead.first_name,
+            "last_name": lead.last_name,
+            "company": lead.company,
+            "title": lead.title,
+            "status": campaign_lead.status,
+            "current_step_index": campaign_lead.current_step_index,
+            "last_step_index": campaign_lead.last_step_index,
+            "next_run_at": campaign_lead.next_run_at.isoformat() if campaign_lead.next_run_at else None,
+            "last_sent_at": campaign_lead.last_sent_at.isoformat() if campaign_lead.last_sent_at else None,
+            "created_at": campaign_lead.created_at.isoformat() if campaign_lead.created_at else None
+        })
+    
+    return result

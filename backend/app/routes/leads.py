@@ -236,3 +236,228 @@ async def enrich_lead(
         "lead_id": str(lead_id),
         "task_id": task.id
     }
+
+
+@router.post("/{lead_id}/linkedin-enrich", response_model=LeadResponse)
+async def enrich_lead_from_linkedin(
+    lead_id: UUID,
+    linkedin_url: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Enrich lead data from LinkedIn profile URL.
+    
+    Uses 3rd-party enrichment API (configured in settings) to fetch:
+    - Job title
+    - Seniority level
+    - Company size
+    - LinkedIn headline
+    
+    Args:
+        lead_id: Lead UUID
+        linkedin_url: LinkedIn profile URL
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        LeadResponse: Updated lead with enriched data
+        
+    Raises:
+        HTTPException: If lead not found or enrichment fails
+    """
+    from ..services.linkedin_enrichment import enrich_linkedin_profile
+    from ..config import settings
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    lead_service = LeadService(db)
+    lead = lead_service.get_lead(lead_id)
+    
+    if not lead:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found"
+        )
+    
+    # Get enrichment API key from settings
+    enrichment_api_key = getattr(settings, 'ENRICHMENT_API_KEY', None)
+    enrichment_provider = getattr(settings, 'ENRICHMENT_PROVIDER', 'clearbit')
+    
+    if not enrichment_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LinkedIn enrichment not configured. Set ENRICHMENT_API_KEY in environment."
+        )
+    
+    try:
+        # Call enrichment service
+        result = enrich_linkedin_profile(
+            linkedin_url=linkedin_url,
+            provider=enrichment_provider,
+            api_key=enrichment_api_key
+        )
+        
+        if not result['success']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"LinkedIn enrichment failed: {result.get('error', 'Unknown error')}"
+            )
+        
+        # Update lead with enriched data
+        lead.linkedin_url = linkedin_url
+        if result.get('job_title'):
+            lead.job_title = result['job_title']
+        if result.get('seniority'):
+            lead.seniority = result['seniority']
+        if result.get('company_size'):
+            lead.company_size = result['company_size']
+        if result.get('linkedin_headline'):
+            lead.linkedin_headline = result['linkedin_headline']
+        
+        db.commit()
+        db.refresh(lead)
+        
+        logger.info(f"Successfully enriched lead {lead_id} from LinkedIn")
+        
+        return lead
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"LinkedIn enrichment failed for lead {lead_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Enrichment failed: {str(e)}"
+        )
+
+
+@router.post("/{lead_id}/tags", status_code=status.HTTP_201_CREATED)
+async def add_lead_tag(
+    lead_id: UUID,
+    tag: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Add a tag to a lead."""
+    from ..models.lead_tag import LeadTag
+    
+    lead_service = LeadService(db)
+    lead = lead_service.get_lead(lead_id)
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Check if tag already exists
+    existing_tag = db.query(LeadTag).filter(
+        LeadTag.lead_id == lead_id,
+        LeadTag.tag == tag
+    ).first()
+    
+    if existing_tag:
+        return {"message": "Tag already exists", "tag": tag}
+    
+    # Create new tag
+    lead_tag = LeadTag(lead_id=lead_id, tag=tag)
+    db.add(lead_tag)
+    db.commit()
+    
+    return {"message": "Tag added successfully", "tag": tag}
+
+
+@router.delete("/{lead_id}/tags/{tag}")
+async def remove_lead_tag(
+    lead_id: UUID,
+    tag: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove a tag from a lead."""
+    from ..models.lead_tag import LeadTag
+    
+    lead_service = LeadService(db)
+    lead = lead_service.get_lead(lead_id)
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Find and delete tag
+    lead_tag = db.query(LeadTag).filter(
+        LeadTag.lead_id == lead_id,
+        LeadTag.tag == tag
+    ).first()
+    
+    if not lead_tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    
+    db.delete(lead_tag)
+    db.commit()
+    
+    return {"message": "Tag removed successfully"}
+
+
+@router.get("/{lead_id}/tags")
+async def get_lead_tags(
+    lead_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all tags for a lead."""
+    from ..models.lead_tag import LeadTag
+    
+    lead_service = LeadService(db)
+    lead = lead_service.get_lead(lead_id)
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    tags = db.query(LeadTag).filter(LeadTag.lead_id == lead_id).all()
+    
+    return {
+        "lead_id": str(lead_id),
+        "tags": [tag.tag for tag in tags]
+    }
+
+
+@router.post("/bulk/tags", status_code=status.HTTP_202_ACCEPTED)
+async def bulk_add_tags(
+    lead_ids: List[UUID],
+    tags: List[str],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Add tags to multiple leads in bulk."""
+    from ..models.lead_tag import LeadTag
+    
+    if not lead_ids or not tags:
+        raise HTTPException(status_code=400, detail="lead_ids and tags are required")
+    
+    # Verify leads exist
+    lead_service = LeadService(db)
+    added_count = 0
+    
+    for lead_id in lead_ids:
+        lead = lead_service.get_lead(lead_id)
+        if not lead:
+            continue
+        
+        for tag in tags:
+            # Check if tag exists
+            existing = db.query(LeadTag).filter(
+                LeadTag.lead_id == lead_id,
+                LeadTag.tag == tag
+            ).first()
+            
+            if not existing:
+                lead_tag = LeadTag(lead_id=lead_id, tag=tag)
+                db.add(lead_tag)
+                added_count += 1
+    
+    db.commit()
+    
+    return {
+        "message": "Bulk tag operation completed",
+        "leads_processed": len(lead_ids),
+        "tags_added": added_count
+    }

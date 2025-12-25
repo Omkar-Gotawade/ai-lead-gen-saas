@@ -101,7 +101,8 @@ async def get_email_provider(
     db: Session = Depends(get_db)
 ):
     """
-    Get current user's email provider configuration.
+    Get email provider configuration.
+    First checks user's own config, then falls back to any system provider.
     
     Args:
         current_user: Authenticated user
@@ -110,9 +111,14 @@ async def get_email_provider(
     Returns:
         Email provider configuration (without sensitive data)
     """
+    # First try to get user's own provider
     provider = db.query(EmailProviderSettings).filter(
         EmailProviderSettings.user_id == current_user.id
     ).first()
+    
+    # If user doesn't have one, use any configured provider as fallback
+    if not provider:
+        provider = db.query(EmailProviderSettings).first()
     
     if not provider:
         raise HTTPException(status_code=404, detail="Email provider not configured")
@@ -134,6 +140,7 @@ async def test_email_provider(
 ):
     """
     Send a test email using configured provider.
+    Falls back to any system provider if user doesn't have own config.
     
     Args:
         request: Test email request
@@ -143,9 +150,13 @@ async def test_email_provider(
     Returns:
         Success message
     """
+    # Try user's own provider first, then any system provider
     provider = db.query(EmailProviderSettings).filter(
         EmailProviderSettings.user_id == current_user.id
     ).first()
+    
+    if not provider:
+        provider = db.query(EmailProviderSettings).first()
     
     if not provider:
         raise HTTPException(

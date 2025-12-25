@@ -1,5 +1,5 @@
 """Organization quota model for rate limiting."""
-from sqlalchemy import Column, Integer, Date, DateTime
+from sqlalchemy import Column, String, Integer, Date, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime, date
 import uuid
