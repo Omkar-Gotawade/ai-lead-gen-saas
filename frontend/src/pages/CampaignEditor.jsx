@@ -1,7 +1,30 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  Clock, 
+  Bot, 
+  Sparkles, 
+  Info,
+  CheckCircle,
+  AlertCircle,
+  Play,
+  Pause,
+  Save,
+  X
+} from 'lucide-react';
 import { getCampaign, getCampaignLeads } from '../api/campaigns';
 import { getSequenceSteps, createSequenceStep, updateSequenceStep, deleteSequenceStep } from '../api/sequenceSteps';
+
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import { Alert, AlertDescription } from '../components/ui/Alert';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 function CampaignEditor() {
   const { campaignId } = useParams();
@@ -12,6 +35,7 @@ function CampaignEditor() {
   const [enrolledLeads, setEnrolledLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
   
   // Form state for adding/editing steps
   const [editingStep, setEditingStep] = useState(null);
@@ -53,9 +77,10 @@ function CampaignEditor() {
 
   const handleSaveStep = async (e) => {
     e.preventDefault();
+    setMessage(null);
 
     if (!stepForm.subject_template.trim() || !stepForm.body_template.trim()) {
-      alert('Subject and body templates are required');
+      setMessage({ type: 'error', text: 'Subject and body templates are required' });
       return;
     }
 
@@ -63,14 +88,14 @@ function CampaignEditor() {
       if (editingStep) {
         // Update existing step
         await updateSequenceStep(editingStep.id, stepForm);
-        alert('Step updated successfully');
+        setMessage({ type: 'success', text: 'Step updated successfully' });
       } else {
         // Create new step
         await createSequenceStep({
           ...stepForm,
           campaign_id: campaignId
         });
-        alert('Step created successfully');
+        setMessage({ type: 'success', text: 'Step created successfully' });
       }
       
       // Reset form and refresh
@@ -88,7 +113,7 @@ function CampaignEditor() {
       await fetchCampaignData();
     } catch (err) {
       console.error('Error saving step:', err);
-      alert('Failed to save step');
+      setMessage({ type: 'error', text: 'Failed to save step' });
     }
   };
 
@@ -104,20 +129,21 @@ function CampaignEditor() {
       ai_goal: step.ai_goal || 'schedule a meeting',
       product_description: step.product_description || ''
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteStep = async (stepId) => {
-    if (!confirm('Are you sure you want to delete this step?')) {
+    if (!window.confirm('Are you sure you want to delete this step?')) {
       return;
     }
 
     try {
       await deleteSequenceStep(stepId);
       await fetchCampaignData();
-      alert('Step deleted successfully');
+      setMessage({ type: 'success', text: 'Step deleted successfully' });
     } catch (err) {
       console.error('Error deleting step:', err);
-      alert('Failed to delete step');
+      setMessage({ type: 'error', text: 'Failed to delete step' });
     }
   };
 
@@ -135,340 +161,339 @@ function CampaignEditor() {
     });
   };
 
+  const getStatusVariant = (status) => {
+    switch (status) {
+      case 'active': return 'success';
+      case 'paused': return 'warning';
+      case 'completed': return 'default';
+      default: return 'secondary';
+    }
+  };
+
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-2 text-gray-600">Loading campaign...</p>
+      <div className="flex justify-center items-center h-96">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   if (error || !campaign) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
-        {error || 'Campaign not found'}
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>{error || 'Campaign not found'}</AlertDescription>
+      </Alert>
     );
   }
 
   return (
-    <div className="px-4 py-8">
+    <div className="space-y-6">
       {/* Campaign Header */}
-      <div className="mb-8">
-        <button
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
           onClick={() => navigate('/campaigns')}
-          className="text-blue-600 hover:text-blue-800 mb-4 flex items-center"
+          icon={<ArrowLeft className="w-4 h-4" />}
+          className="pl-0 hover:bg-transparent hover:text-blue-600"
         >
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
           Back to Campaigns
-        </button>
+        </Button>
 
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">{campaign.name}</h1>
-            <p className="text-gray-600 mt-1">{campaign.description}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">{campaign.name}</h1>
+            <p className="text-slate-500 mt-1">{campaign.description}</p>
           </div>
           
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-600">Status:</span>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              campaign.status === 'active' ? 'bg-green-100 text-green-800' :
-              campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-            </span>
+            <span className="text-sm font-medium text-slate-600">Status:</span>
+            <Badge variant={getStatusVariant(campaign.status)} className="capitalize">
+              {campaign.status}
+            </Badge>
           </div>
         </div>
           
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded">
-          <p className="text-sm">
+        <Alert className="bg-blue-50 border-blue-200 text-blue-800">
+          <Info className="w-4 h-4 text-blue-600" />
+          <AlertDescription>
             <strong>Template Variables:</strong> Use {`{{first_name}}`}, {`{{last_name}}`}, {`{{company}}`}, {`{{title}}`}, {`{{email}}`}, {`{{phone}}`} in your templates
-          </p>
-        </div>
+          </AlertDescription>
+        </Alert>
       </div>
 
+      {message && (
+        <Alert variant={message.type === 'error' ? 'destructive' : 'default'}>
+          {message.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Sequence Steps Section */}
-      <div className="mb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Sequence Steps List */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Sequence Steps ({steps.length})</h2>
-            
-            {steps.length === 0 ? (
-              <div className="bg-white rounded-lg shadow p-8 text-center">
-                <p className="text-gray-600">No steps yet. Add your first step to start building your sequence.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {steps.map((step, index) => (
-                  <div key={step.id} className="bg-white rounded-lg shadow p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center">
-                        <span className="bg-blue-100 text-blue-800 font-semibold px-2 py-1 rounded text-sm mr-2">
-                          Step {step.step_index}
-                        </span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Sequence Steps List */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-slate-900">Sequence Steps ({steps.length})</h2>
+          
+          {steps.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-slate-500">
+                No steps yet. Add your first step to start building your sequence.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {steps.map((step) => (
+                <Card key={step.id} className={`transition-all ${editingStep?.id === step.id ? 'ring-2 ring-blue-500' : ''}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">Step {step.step_index}</Badge>
                         {step.delay_days > 0 && (
-                          <span className="text-gray-600 text-sm">
-                            (Wait {step.delay_days} day{step.delay_days !== 1 ? 's' : ''})
+                          <span className="text-xs text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Wait {step.delay_days} day{step.delay_days !== 1 ? 's' : ''}
                           </span>
                         )}
+                        {step.use_ai_generation && (
+                          <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50">
+                            <Sparkles className="w-3 h-3 mr-1" />
+                            AI Personalized
+                          </Badge>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <button
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleEditStep(step)}
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
+                          icon={<Edit2 className="w-4 h-4" />}
+                          className="h-8 w-8 p-0"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleDeleteStep(step.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Delete
-                        </button>
+                          icon={<Trash2 className="w-4 h-4" />}
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        />
                       </div>
                     </div>
-                    <div className="text-sm">
-                      <p className="font-medium text-gray-900 mb-1">
-                        {step.subject_template}
+                    <div className="space-y-2">
+                      <p className="font-medium text-slate-900 text-sm">
+                        Subject: {step.subject_template}
                       </p>
-                      <p className="text-gray-600 line-clamp-2">
+                      <p className="text-slate-600 text-sm line-clamp-2 bg-slate-50 p-2 rounded border border-slate-100">
                         {step.body_template}
                       </p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
-          {/* Add/Edit Step Form */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">
-              {editingStep ? 'Edit Step' : 'Add New Step'}
-            </h2>
-            
-            <form onSubmit={handleSaveStep} className="bg-white rounded-lg shadow p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Step Number
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={stepForm.step_index}
-                  onChange={(e) => setStepForm({ ...stepForm, step_index: parseInt(e.target.value) })}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Delay (days after previous step)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={stepForm.delay_days}
-                  onChange={(e) => setStepForm({ ...stepForm, delay_days: parseInt(e.target.value) })}
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Set to 0 for immediate sending (first step)
-                </p>
-              </div>
-
-              {/* AI Personalization Toggle */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <input
-                    type="checkbox"
-                    id="use_ai_generation"
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                    checked={stepForm.use_ai_generation}
-                    onChange={(e) => setStepForm({ ...stepForm, use_ai_generation: e.target.checked })}
+        {/* Add/Edit Step Form */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-slate-900">
+            {editingStep ? 'Edit Step' : 'Add New Step'}
+          </h2>
+          
+          <Card>
+            <form onSubmit={handleSaveStep}>
+              <CardContent className="space-y-4 pt-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Step Number"
+                    type="number"
+                    min="1"
+                    value={stepForm.step_index}
+                    onChange={(e) => setStepForm({ ...stepForm, step_index: parseInt(e.target.value) })}
+                    required
                   />
-                  <label htmlFor="use_ai_generation" className="text-sm font-medium text-gray-700">
-                    🤖 Use AI Personalization (Each lead gets a unique email)
-                  </label>
+                  <Input
+                    label="Delay (days)"
+                    type="number"
+                    min="0"
+                    value={stepForm.delay_days}
+                    onChange={(e) => setStepForm({ ...stepForm, delay_days: parseInt(e.target.value) })}
+                    required
+                    helperText="Days after previous step (0 for immediate)"
+                  />
                 </div>
-                
-                {stepForm.use_ai_generation && (
-                  <div className="space-y-4 pl-7 border-l-2 border-blue-200">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email Tone *
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={stepForm.ai_tone}
-                        onChange={(e) => setStepForm({ ...stepForm, ai_tone: e.target.value })}
-                        required={stepForm.use_ai_generation}
-                      >
-                        <option value="professional">Professional</option>
-                        <option value="friendly">Friendly</option>
-                        <option value="casual">Casual</option>
-                        <option value="aggressive">Aggressive</option>
-                      </select>
-                    </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email Goal *
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., schedule a meeting, book a demo, get a reply"
+                {/* AI Personalization Toggle */}
+                <div className="border rounded-lg p-4 bg-slate-50 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="use_ai_generation"
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                      checked={stepForm.use_ai_generation}
+                      onChange={(e) => setStepForm({ ...stepForm, use_ai_generation: e.target.checked })}
+                    />
+                    <label htmlFor="use_ai_generation" className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-purple-600" />
+                      Use AI Personalization
+                    </label>
+                  </div>
+                  
+                  {stepForm.use_ai_generation && (
+                    <div className="space-y-4 pl-7 border-l-2 border-purple-200">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Email Tone
+                        </label>
+                        <select
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          value={stepForm.ai_tone}
+                          onChange={(e) => setStepForm({ ...stepForm, ai_tone: e.target.value })}
+                          required={stepForm.use_ai_generation}
+                        >
+                          <option value="professional">Professional</option>
+                          <option value="friendly">Friendly</option>
+                          <option value="casual">Casual</option>
+                          <option value="aggressive">Aggressive</option>
+                        </select>
+                      </div>
+
+                      <Input
+                        label="Email Goal"
+                        placeholder="e.g., schedule a meeting"
                         value={stepForm.ai_goal}
                         onChange={(e) => setStepForm({ ...stepForm, ai_goal: e.target.value })}
                         required={stepForm.use_ai_generation}
                       />
-                    </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Product/Service Description *
-                      </label>
-                      <textarea
-                        rows="4"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Describe what you're offering. AI will use this to personalize emails for each lead based on their profile (name, title, company, industry, etc.)"
-                        value={stepForm.product_description}
-                        onChange={(e) => setStepForm({ ...stepForm, product_description: e.target.value })}
-                        required={stepForm.use_ai_generation}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        💡 AI will automatically personalize emails using lead data (name, title, company, industry, LinkedIn info)
-                      </p>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Product/Service Description
+                        </label>
+                        <textarea
+                          rows="3"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="Describe your offer for AI context..."
+                          value={stepForm.product_description}
+                          onChange={(e) => setStepForm({ ...stepForm, product_description: e.target.value })}
+                          required={stepForm.use_ai_generation}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Subject Template * {!stepForm.use_ai_generation && <span className="text-xs text-gray-500">(Used as fallback if AI disabled)</span>}
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <Input
+                  label={
+                    <span className="flex items-center gap-2">
+                      Subject Template
+                      {!stepForm.use_ai_generation && <span className="text-xs font-normal text-slate-500">(Fallback)</span>}
+                    </span>
+                  }
                   placeholder="e.g., Hi {{first_name}}, quick question"
                   value={stepForm.subject_template}
                   onChange={(e) => setStepForm({ ...stepForm, subject_template: e.target.value })}
                   required
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Body Template * {!stepForm.use_ai_generation && <span className="text-xs text-gray-500">(Used as fallback if AI disabled)</span>}
-                </label>
-                <textarea
-                  rows="8"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={`Hi {{first_name}},\n\nI noticed you work at {{company}}...\n\nBest regards`}
-                  value={stepForm.body_template}
-                  onChange={(e) => setStepForm({ ...stepForm, body_template: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <span className="flex items-center gap-2">
+                      Body Template
+                      {!stepForm.use_ai_generation && <span className="text-xs font-normal text-slate-500">(Fallback)</span>}
+                    </span>
+                  </label>
+                  <textarea
+                    rows="6"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                    placeholder={`Hi {{first_name}},\n\nI noticed you work at {{company}}...\n\nBest regards`}
+                    value={stepForm.body_template}
+                    onChange={(e) => setStepForm({ ...stepForm, body_template: e.target.value })}
+                    required
+                  />
+                </div>
+              </CardContent>
+              <CardFooter className="flex gap-2 bg-slate-50 border-t border-slate-100">
+                <Button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="flex-1"
+                  icon={<Save className="w-4 h-4" />}
                 >
                   {editingStep ? 'Update Step' : 'Add Step'}
-                </button>
+                </Button>
                 {editingStep && (
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={handleCancelEdit}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                    icon={<X className="w-4 h-4" />}
                   >
                     Cancel
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </CardFooter>
             </form>
-          </div>
+          </Card>
         </div>
       </div>
 
       {/* Enrolled Leads Section */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Enrolled Leads ({enrolledLeads.length})</h2>
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-slate-900">Enrolled Leads ({enrolledLeads.length})</h2>
         
-        {enrolledLeads.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-600">No leads enrolled yet. Go to Leads page to add leads to this campaign.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Lead
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Company
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Current Step
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Sent
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {enrolledLeads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {lead.first_name} {lead.last_name}
-                        </div>
-                        <div className="text-sm text-gray-500">{lead.email}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{lead.company || '-'}</div>
-                        <div className="text-sm text-gray-500">{lead.title || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          lead.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          lead.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                          lead.status === 'stopped' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {lead.status.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.last_step_index > 0 ? `Step ${lead.last_step_index}` : 'Not started'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.last_sent_at ? new Date(lead.last_sent_at).toLocaleDateString() : '-'}
-                      </td>
+        <Card>
+          <CardContent className="p-0">
+            {enrolledLeads.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                No leads enrolled yet. Go to Leads page to add leads to this campaign.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Lead</th>
+                      <th className="px-6 py-4 font-medium">Company</th>
+                      <th className="px-6 py-4 font-medium">Status</th>
+                      <th className="px-6 py-4 font-medium">Current Step</th>
+                      <th className="px-6 py-4 font-medium">Last Sent</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {enrolledLeads.map((lead) => (
+                      <tr key={lead.id} className="bg-white hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-slate-900">
+                            {lead.first_name} {lead.last_name}
+                          </div>
+                          <div className="text-slate-500 text-xs">{lead.email}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-slate-900">{lead.company || '-'}</div>
+                          <div className="text-slate-500 text-xs">{lead.title || '-'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant={
+                            lead.status === 'completed' ? 'success' :
+                            lead.status === 'in_progress' ? 'default' :
+                            lead.status === 'stopped' ? 'destructive' : 'secondary'
+                          } className="capitalize">
+                            {lead.status.replace('_', ' ')}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {lead.last_step_index > 0 ? `Step ${lead.last_step_index}` : 'Not started'}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {lead.last_sent_at ? new Date(lead.last_sent_at).toLocaleDateString() : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

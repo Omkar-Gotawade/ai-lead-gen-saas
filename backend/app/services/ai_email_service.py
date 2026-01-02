@@ -14,6 +14,7 @@ class GeneratedEmail(BaseModel):
 
 async def generate_email(
     lead: Lead,
+    sender_name: str,
     tone: str = "professional",
     goal: str = "schedule a meeting",
     product_description: str = "our product"
@@ -23,6 +24,7 @@ async def generate_email(
     
     Args:
         lead: Lead object with contact information
+        sender_name: Name of the person sending the email (for signature)
         tone: Email tone (formal, friendly, casual, aggressive)
         goal: Email goal (e.g., "book a demo", "get a reply")
         product_description: Description of product/service
@@ -55,6 +57,7 @@ Email Requirements:
 - Tone: {tone}
 - Goal: {goal}
 - Product/Service: {product_description}
+- Sender's Name: {sender_name}
 
 Guidelines:
 - Keep it concise (under 150 words)
@@ -62,12 +65,16 @@ Guidelines:
 - Make it conversational and human
 - Include a clear call-to-action
 - No buzzwords or corporate jargon
-- Format: Return ONLY the subject line and body, separated by "---"
+- IMPORTANT: End with proper email signature: "Best regards,\\n{sender_name}"
+- Format: Return ONLY the subject line and body (including signature), separated by "---"
 
 Format your response exactly as:
 SUBJECT: [subject line here]
 ---
 [email body here]
+
+Best regards,
+{sender_name}
 """
     
     try:

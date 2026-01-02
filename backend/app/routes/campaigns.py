@@ -417,3 +417,74 @@ async def get_campaign_leads(
         })
     
     return result
+
+
+@router.post("/campaigns/test-send")
+async def test_send(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint for QA testing - simulates sending an email.
+    Checks quota limits and returns appropriate response.
+    
+    For QA testing of warm-up limits and throttling.
+    """
+    from datetime import date, datetime
+    from ..models.sending_log import SendingLog
+    from ..models.email_warmup_domain import EmailWarmupDomain
+    
+    recipient = payload.get("to")
+    if not recipient:
+        raise HTTPException(status_code=400, detail="Recipient email required")
+    
+    # Check today's quota
+    today = date.today()
+    sent_today = db.query(SendingLog).filter(
+        SendingLog.user_id == current_user.id,
+        SendingLog.created_at >= datetime.combine(today, datetime.min.time()),
+        SendingLog.status == "sent"
+    ).count()
+    
+    # Get warmup limit
+    warmup_domain = db.query(EmailWarmupDomain).filter(
+        EmailWarmupDomain.org_id == current_user.id
+    ).first()
+    
+    daily_limit = warmup_domain.daily_limit if warmup_domain else 50
+    
+    # Check if over limit
+    if sent_today >= daily_limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "Daily sending limit reached",
+                "limit": daily_limit,
+                "sent_today": sent_today,
+                "reset_at": "midnight UTC"
+            }
+        )
+    
+    # Log the "send" (for testing, we don't actually send)
+    log = SendingLog(
+        user_id=current_user.id,
+        lead_id=None,
+        to_email=recipient,
+        subject=payload.get("subject", "Test Email"),
+        provider_type="test",
+        status="sent"
+    )
+    db.add(log)
+    db.commit()
+    
+    remaining = daily_limit - (sent_today + 1)
+    
+    return {
+        "status": "sent",
+        "message": "Test email logged successfully",
+        "recipient": recipient,
+        "quota_remaining": remaining,
+        "sent_today": sent_today + 1,
+        "daily_limit": daily_limit
+    }

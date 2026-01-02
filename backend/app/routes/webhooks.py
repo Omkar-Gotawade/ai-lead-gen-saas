@@ -492,3 +492,90 @@ async def get_webhook_events(
     except Exception as e:
         logger.error(f"Error fetching webhook events: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/webhooks/sendgrid/activity")
+async def get_sendgrid_activity(
+    limit: int = 100,
+    query: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch email activity directly from SendGrid API.
+    
+    Uses SendGrid's Email Activity Feed API to get real-time email events.
+    """
+    try:
+        from app.models.email_provider import EmailProviderSettings, ProviderType
+        from app.services.crypto_service import decrypt_value
+        from sendgrid import SendGridAPIClient
+        import json
+        
+        # Get SendGrid provider settings
+        provider = db.query(EmailProviderSettings).filter(
+            EmailProviderSettings.type == ProviderType.SENDGRID
+        ).first()
+        
+        if not provider:
+            raise HTTPException(status_code=404, detail="SendGrid not configured")
+        
+        # Decrypt API key
+        api_key = decrypt_value(provider.sendgrid_api_key_encrypted)
+        
+        # Initialize SendGrid client
+        sg = SendGridAPIClient(api_key)
+        
+        # Build query parameters
+        query_params = {
+            "limit": min(limit, 1000)  # SendGrid max is 1000
+        }
+        
+        if query:
+            query_params["query"] = query
+        
+        # Fetch email activity using correct Email Activity Feed API endpoint
+        # The correct endpoint is /v3/messages (Email Activity Feed)
+        response = sg.client.messages.get(query_params=query_params)
+        
+        if response.status_code == 200:
+            data = json.loads(response.body)
+            messages = data.get('messages', [])
+            
+            logger.info(f"SendGrid API response: {len(messages)} messages retrieved")
+            
+            # Transform SendGrid format to our format
+            events_list = []
+            for msg in messages:
+                events_list.append({
+                    "id": msg.get('msg_id'),
+                    "event_type": msg.get('status', 'unknown'),
+                    "provider": "sendgrid",
+                    "parsed_from": msg.get('from_email'),
+                    "parsed_to": msg.get('to_email'),
+                    "parsed_subject": msg.get('subject'),
+                    "created_at": msg.get('last_event_time'),
+                    "opens_count": msg.get('opens_count', 0),
+                    "clicks_count": msg.get('clicks_count', 0),
+                    "source": "sendgrid_api"
+                })
+            
+            return {
+                "events": events_list,
+                "total": len(events_list)
+            }
+        else:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"SendGrid API error: {response.body}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching SendGrid activity: {e}", exc_info=True)
+        # Return empty results instead of error so UI still works
+        return {
+            "events": [],
+            "total": 0,
+            "error": str(e)
+        }

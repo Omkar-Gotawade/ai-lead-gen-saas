@@ -43,6 +43,7 @@ async def generate_email_endpoint(
         # Generate email using AI service
         generated = await generate_email(
             lead=lead,
+            sender_name=current_user.full_name or current_user.email.split('@')[0],
             tone=request.tone or "professional",
             goal=request.goal or "schedule a meeting",
             product_description=request.product_description or "our product or service"

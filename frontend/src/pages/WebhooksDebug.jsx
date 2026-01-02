@@ -1,10 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import axios from '../api/axios';
+import { 
+  Inbox, 
+  Send, 
+  AlertCircle, 
+  CheckCircle, 
+  Reply, 
+  Eye, 
+  Ban, 
+  Filter,
+  RefreshCw
+} from 'lucide-react';
+import api from '../api/axios';
+
+import Button from '../components/ui/Button';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { Alert, AlertDescription } from '../components/ui/Alert';
 
 export default function WebhooksDebug() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchEvents();
@@ -13,6 +31,7 @@ export default function WebhooksDebug() {
   const fetchEvents = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       const params = new URLSearchParams();
       params.append('limit', '100');
@@ -20,155 +39,183 @@ export default function WebhooksDebug() {
         params.append('event_type', filter);
       }
       
-      const response = await axios.get(`/api/webhooks/events?${params.toString()}`);
-      setEvents(response.data.events || []);
+      // Fetch from both sources simultaneously
+      const [dbResponse, sendGridResponse] = await Promise.allSettled([
+        api.get(`/api/webhooks/events?${params.toString()}`),
+        api.get(`/api/webhooks/sendgrid/activity?${params.toString()}`)
+      ]);
+      
+      let allEvents = [];
+      
+      // Add database events
+      if (dbResponse.status === 'fulfilled' && dbResponse.value?.data?.events) {
+        allEvents = allEvents.concat(dbResponse.value.data.events);
+      }
+      
+      // Add SendGrid API events
+      if (sendGridResponse.status === 'fulfilled' && sendGridResponse.value?.data?.events) {
+        allEvents = allEvents.concat(sendGridResponse.value.data.events);
+      }
+      
+      // Remove duplicates based on id and sort by created_at
+      const uniqueEvents = Array.from(
+        new Map(allEvents.map(event => [event.id, event])).values()
+      );
+      
+      uniqueEvents.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      setEvents(uniqueEvents);
+      
+      // Show error only if both failed
+      if (dbResponse.status === 'rejected' && sendGridResponse.status === 'rejected') {
+        setError('Failed to load webhook events. Please try again.');
+      }
     } catch (error) {
       console.error('Error fetching webhook events:', error);
+      setError('Failed to load webhook events. Please try again.');
       setEvents([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const getEventIcon = (type) => {
+    switch (type) {
+      case 'sent': return <Send className="w-4 h-4" />;
+      case 'delivered': return <CheckCircle className="w-4 h-4" />;
+      case 'reply': return <Reply className="w-4 h-4" />;
+      case 'bounce': return <AlertCircle className="w-4 h-4" />;
+      case 'spam': return <Ban className="w-4 h-4" />;
+      case 'open': return <Eye className="w-4 h-4" />;
+      default: return <Inbox className="w-4 h-4" />;
+    }
+  };
+
+  const getEventBadgeVariant = (type) => {
+    switch (type) {
+      case 'delivered': return 'success';
+      case 'reply': return 'success';
+      case 'open': return 'info';
+      case 'bounce': return 'destructive';
+      case 'spam': return 'destructive';
+      case 'sent': return 'default';
+      default: return 'secondary';
+    }
+  };
+
+  const filters = [
+    { id: 'all', label: 'All Events', icon: Filter },
+    { id: 'sent', label: 'Sent', icon: Send },
+    { id: 'delivered', label: 'Delivered', icon: CheckCircle },
+    { id: 'reply', label: 'Replies', icon: Reply },
+    { id: 'bounce', label: 'Bounces', icon: AlertCircle },
+    { id: 'spam', label: 'Spam', icon: Ban },
+    { id: 'open', label: 'Opens', icon: Eye },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Email Events</h1>
-      </div>
-
-      {/* Filter */}
-      <div className="bg-white p-4 rounded-lg shadow">
-        <div className="flex gap-2 flex-wrap">
-          <FilterButton
-            active={filter === 'all'}
-            onClick={() => setFilter('all')}
-            label="All Events"
-          />
-          <FilterButton
-            active={filter === 'sent'}
-            onClick={() => setFilter('sent')}
-            label="📤 Sent"
-          />
-          <FilterButton
-            active={filter === 'failed'}
-            onClick={() => setFilter('failed')}
-            label="❌ Failed"
-          />
-          <FilterButton
-            active={filter === 'delivered'}
-            onClick={() => setFilter('delivered')}
-            label="✅ Delivered"
-          />
-          <FilterButton
-            active={filter === 'reply'}
-            onClick={() => setFilter('reply')}
-            label="↩️ Replies"
-          />
-          <FilterButton
-            active={filter === 'bounce'}
-            onClick={() => setFilter('bounce')}
-            label="⚠️ Bounces"
-          />
-          <FilterButton
-            active={filter === 'spam'}
-            onClick={() => setFilter('spam')}
-            label="🚫 Spam"
-          />
-          <FilterButton
-            active={filter === 'open'}
-            onClick={() => setFilter('open')}
-            label="👁️ Opens"
-          />
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Email Events</h1>
+          <p className="text-slate-500">Monitor real-time email delivery events and webhooks.</p>
         </div>
+        <Button 
+          variant="outline" 
+          onClick={fetchEvents} 
+          icon={<RefreshCw className="w-4 h-4" />}
+          isLoading={loading}
+        >
+          Refresh
+        </Button>
       </div>
 
-      {/* Events List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap gap-2">
+            {filters.map((f) => {
+              const IconComponent = f.icon;
+              return (
+                <Button
+                  key={f.id}
+                  variant={filter === f.id ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilter(f.id)}
+                  icon={<IconComponent className="w-4 h-4" />}
+                  className={filter === f.id ? '' : 'text-slate-600'}
+                >
+                  {f.label}
+                </Button>
+              );
+            })}
           </div>
-        ) : events.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-lg mb-2">No webhook events yet</p>
-            <p className="text-sm">Events will appear here once your webhooks are configured</p>
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Event Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  From
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  To
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Subject
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Provider
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {events.map((event) => (
-                <tr key={event.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(event.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <EventTypeBadge type={event.event_type} />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{event.parsed_from}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{event.parsed_to}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{event.parsed_subject}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {event.provider}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <Inbox className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+              <p className="text-lg font-medium mb-1">No events found</p>
+              <p className="text-sm">
+                {filter === 'all' 
+                  ? 'Events will appear here once your webhooks are configured.' 
+                  : `No ${filter} events found.`}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Time</th>
+                    <th className="px-6 py-3 font-medium">Event Type</th>
+                    <th className="px-6 py-3 font-medium">From</th>
+                    <th className="px-6 py-3 font-medium">To</th>
+                    <th className="px-6 py-3 font-medium">Subject</th>
+                    <th className="px-6 py-3 font-medium">Provider</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {events.map((event) => (
+                    <tr key={event.id} className="bg-white hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-slate-500">
+                        {new Date(event.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant={getEventBadgeVariant(event.event_type)} className="flex items-center gap-1 w-fit">
+                          {getEventIcon(event.event_type)}
+                          <span className="capitalize">{event.event_type}</span>
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-slate-900 max-w-[200px] truncate" title={event.parsed_from}>
+                        {event.parsed_from}
+                      </td>
+                      <td className="px-6 py-4 text-slate-900 max-w-[200px] truncate" title={event.parsed_to}>
+                        {event.parsed_to}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 max-w-[300px] truncate" title={event.parsed_subject}>
+                        {event.parsed_subject || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-slate-500">
+                        {event.provider}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
-  );
-}
-
-function FilterButton({ active, onClick, label }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-        active
-          ? 'bg-blue-600 text-white'
-          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function EventTypeBadge({ type }) {
-  const colors = {
-    reply: 'bg-green-100 text-green-800',
-    bounce: 'bg-red-100 text-red-800',
-    delivered: 'bg-blue-100 text-blue-800',
-    spam: 'bg-yellow-100 text-yellow-800',
-    open: 'bg-purple-100 text-purple-800',
-  };
-
-  return (
-    <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[type] || 'bg-gray-100 text-gray-800'}`}>
-      {type}
-    </span>
   );
 }

@@ -170,6 +170,11 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             db.commit()
             return
         
+        # Get user for sender name
+        from app.models.user import User
+        user = db.query(User).filter(User.id == campaign.user_id).first()
+        sender_name = user.full_name if user and user.full_name else (user.email.split('@')[0] if user else 'Your Company')
+        
         # Generate email content (AI or template)
         if step.use_ai_generation and step.product_description:
             try:
@@ -181,6 +186,7 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
                 try:
                     generated = loop.run_until_complete(generate_email(
                         lead=lead,
+                        sender_name=sender_name,
                         tone=step.ai_tone or 'professional',
                         goal=step.ai_goal or 'schedule a meeting',
                         product_description=step.product_description

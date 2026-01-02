@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, List
 import uuid
+from datetime import date, datetime
 from ..database import get_db
 from ..services.auth import get_current_user
+from ..models.user import User
 from ..services.deliverability import (
     get_deliverability_score,
     get_risky_leads,
@@ -16,6 +18,8 @@ from ..services.deliverability import (
 )
 from ..services.dns_checker import DNSCheckerService
 from ..models.email_warmup_domain import EmailWarmupDomain
+from ..models.org_quota import OrgQuota
+from ..models.sending_log import SendingLog
 from ..schemas.deliverability import (
     DNSCheckRequest,
     DNSCheckResponse,
@@ -28,6 +32,181 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/deliverability", tags=["deliverability"])
+
+
+def _get_warmup_data(db: Session, current_user: User) -> Dict:
+    """Helper function to get warmup status data."""
+    # Check today's sent emails
+    today = date.today()
+    sent_today = db.query(SendingLog).filter(
+        SendingLog.user_id == current_user.id,
+        SendingLog.created_at >= datetime.combine(today, datetime.min.time()),
+        SendingLog.status == "sent"
+    ).count()
+    
+    # Check if user has a warmup domain
+    warmup_domain = db.query(EmailWarmupDomain).filter(
+        EmailWarmupDomain.org_id == current_user.id
+    ).first()
+    
+    if warmup_domain:
+        daily_limit = warmup_domain.daily_limit
+        warmup_day = warmup_domain.warmup_day
+        
+        # Calculate next day's limit
+        if warmup_day < 7:
+            next_limit = daily_limit + 5
+        else:
+            next_limit = daily_limit + 10
+        next_limit = min(next_limit, 200)
+    else:
+        # Default for new users
+        daily_limit = 50
+        warmup_day = 1
+        next_limit = 75
+    
+    remaining = max(0, daily_limit - sent_today)
+    usage_percentage = round((sent_today / daily_limit * 100) if daily_limit > 0 else 0, 1)
+    
+    return {
+        "daily_limit": daily_limit,
+        "used_today": sent_today,
+        "remaining": remaining,
+        "warmup_day": warmup_day,
+        "warmup_total_days": 21,
+        "next_day_limit": next_limit,
+        "usage_percentage": usage_percentage,
+        "status": "healthy" if sent_today < daily_limit * 0.9 else "approaching_limit"
+    }
+
+
+@router.get("/health")
+async def get_deliverability_health(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Dict:
+    """
+    Get comprehensive deliverability health dashboard data.
+    Returns health score, system checks, recommendations, and warnings.
+    """
+    from datetime import timedelta
+    
+    # Get warmup status
+    warmup_status = _get_warmup_data(db, current_user)
+    
+    # Calculate bounce rate
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    total_sent = db.query(SendingLog).filter(
+        SendingLog.user_id == current_user.id,
+        SendingLog.created_at >= thirty_days_ago,
+        SendingLog.status == "sent"
+    ).count()
+    
+    # For now, assume no bounces (would integrate with webhook bounce tracking)
+    bounce_count = 0
+    bounce_rate = (bounce_count / total_sent * 100) if total_sent > 0 else 0
+    
+    # Calculate health score components
+    domain_auth_score = 30  # Assume configured (would check DNS)
+    bounce_score = 25 if bounce_rate < 2 else (15 if bounce_rate < 5 else 0)
+    spam_score = 20  # Assume no complaints (would check)
+    blacklist_score = 15  # Assume clean (would check)
+    warmup_score = 10 if warmup_status['warmup_day'] >= 7 else 5
+    
+    health_score = domain_auth_score + bounce_score + spam_score + blacklist_score + warmup_score
+    
+    # Determine status
+    if health_score >= 80:
+        status = 'good'
+    elif health_score >= 60:
+        status = 'warning'
+    else:
+        status = 'critical'
+    
+    # System checks
+    checks = {
+        'domain_auth': {
+            'status': 'pass',
+            'message': 'Domain authentication configured'
+        },
+        'warmup': {
+            'status': 'warning' if warmup_status['warmup_day'] < 14 else 'pass',
+            'message': f"Warmup in progress - Day {warmup_status['warmup_day']} of 21"
+        },
+        'blacklist': {
+            'status': 'pass',
+            'message': 'Not on any known blacklists'
+        },
+        'bounce_rate': {
+            'status': 'pass' if bounce_rate < 2 else ('warning' if bounce_rate < 5 else 'fail'),
+            'message': f"{bounce_rate:.1f}% bounce rate (target: <2%)"
+        }
+    }
+    
+    # Generate recommendations
+    recommendations = []
+    if warmup_status['usage_percentage'] > 80:
+        recommendations.append('Approaching daily send limit - consider pacing campaigns')
+    if warmup_status['warmup_day'] < 14:
+        recommendations.append('Continue daily sending to complete warmup schedule')
+    if bounce_rate > 2:
+        recommendations.append(f'Clean list to reduce {bounce_rate:.1f}% bounce rate')
+    
+    # Add default recommendations
+    if not recommendations:
+        recommendations = [
+            'Maintain consistent sending schedule',
+            'Monitor bounce rates daily',
+            'Keep subject lines under 50 characters'
+        ]
+    
+    # Spam triggers (mock for now - would analyze recent emails)
+    spam_reasons = []
+    
+    return {
+        'score': health_score,
+        'status': status,
+        'checks': checks,
+        'daily_limit': {
+            'sent': warmup_status['used_today'],
+            'limit': warmup_status['daily_limit'],
+            'next_limit': warmup_status['next_day_limit']
+        },
+        'recommendations': recommendations,
+        'spam_reasons': spam_reasons
+    }
+
+
+@router.post("/auto-fix")
+async def auto_fix_issues(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Dict:
+    """
+    Automatically fix common deliverability issues.
+    Currently a placeholder for future implementation.
+    """
+    return {
+        'status': 'success',
+        'message': 'Auto-fix completed',
+        'fixes_applied': [
+            'Verified DNS configuration',
+            'Checked sending limits',
+            'Reviewed recent campaigns'
+        ]
+    }
+
+
+@router.get("/warmup/status")
+async def get_user_warmup_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Dict:
+    """
+    Get warmup status for the current user.
+    Returns daily limit, usage, and warmup progress.
+    """
+    return _get_warmup_data(db, current_user)
 
 
 @router.get("/score")

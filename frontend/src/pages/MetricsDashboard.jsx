@@ -12,7 +12,26 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
+import { 
+  Calendar, 
+  BarChart2, 
+  Mail, 
+  CheckCircle, 
+  MessageSquare, 
+  AlertTriangle,
+  TrendingUp,
+  Users,
+  Clock,
+  Activity
+} from 'lucide-react';
+
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import { Alert, AlertDescription } from '../components/ui/Alert';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import Badge from '../components/ui/Badge';
 
 ChartJS.register(
   CategoryScale,
@@ -131,16 +150,23 @@ export default function MetricsDashboard() {
     },
     scales: {
       y: {
-        beginAtZero: true
+        beginAtZero: true,
+        grid: {
+          color: '#f1f5f9'
+        }
+      },
+      x: {
+        grid: {
+          display: false
+        }
       }
     }
   };
 
   if (authLoading || loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        <p className="ml-4 text-gray-600">{authLoading ? 'Loading user info...' : 'Loading analytics...'}</p>
+      <div className="flex justify-center items-center h-96">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -148,14 +174,15 @@ export default function MetricsDashboard() {
   if (error) {
     return (
       <div className="space-y-4">
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
-          <p className="font-semibold">Error loading analytics</p>
-          <p className="text-sm mt-1">{error}</p>
-        </div>
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded">
-          <p className="font-semibold">Quick Fix:</p>
-          <p className="text-sm mt-1">Click the "Logout" button (top right) and login again to refresh your session.</p>
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800">
+          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+          <AlertDescription>
+            <strong>Quick Fix:</strong> Click the "Logout" button (top right) and login again to refresh your session.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -163,34 +190,37 @@ export default function MetricsDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
+          <p className="text-slate-500">Track your campaign performance and engagement.</p>
+        </div>
         
         {/* Date Range Picker */}
-        <div className="flex gap-4 items-center">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+        <div className="flex flex-wrap gap-4 items-end bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+          <div className="w-full sm:w-auto">
+            <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
             <input
               type="date"
               value={dateRange.since}
               onChange={(e) => setDateRange({ ...dateRange, since: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+          <div className="w-full sm:w-auto">
+            <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
             <input
               type="date"
               value={dateRange.until}
               onChange={(e) => setDateRange({ ...dateRange, until: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="mt-6">
+          <div className="w-full sm:w-auto">
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
@@ -205,28 +235,28 @@ export default function MetricsDashboard() {
           <MetricCard
             title="Emails Sent"
             value={overview.emails_sent}
-            icon="📧"
+            icon={Mail}
             color="blue"
           />
           <MetricCard
             title="Delivered"
             value={overview.emails_delivered}
             subtitle={`${((overview.emails_delivered / overview.emails_sent) * 100 || 0).toFixed(1)}% delivery rate`}
-            icon="✅"
+            icon={CheckCircle}
             color="green"
           />
           <MetricCard
             title="Replies"
             value={overview.replies}
             subtitle={`${overview.reply_rate}% reply rate`}
-            icon="💬"
+            icon={MessageSquare}
             color="purple"
           />
           <MetricCard
             title="Bounces"
             value={overview.bounces}
             subtitle={`${overview.bounce_rate}% bounce rate`}
-            icon="⚠️"
+            icon={AlertTriangle}
             color="red"
           />
         </div>
@@ -234,43 +264,86 @@ export default function MetricsDashboard() {
 
       {/* Additional Stats */}
       {overview && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Additional Metrics</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatItem label="Unique Leads Contacted" value={overview.unique_leads_contacted} />
-            <StatItem label="Avg Opens per Lead" value="-" />
-            <StatItem label="Best Performing Day" value="-" />
-            <StatItem label="Response Time (avg)" value="-" />
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Activity className="w-5 h-5 text-slate-500" />
+              Additional Metrics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <StatItem 
+                label="Unique Leads Contacted" 
+                value={overview.unique_leads_contacted} 
+                icon={Users}
+              />
+              <StatItem 
+                label="Avg Opens per Lead" 
+                value="-" 
+                icon={TrendingUp}
+              />
+              <StatItem 
+                label="Best Performing Day" 
+                value="-" 
+                icon={Calendar}
+              />
+              <StatItem 
+                label="Response Time (avg)" 
+                value="-" 
+                icon={Clock}
+              />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Timeline Chart */}
       {timelineChartData && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Email Activity Timeline</h3>
-          <div style={{ height: '400px' }}>
-            <Line data={timelineChartData} options={chartOptions} />
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-slate-500" />
+              Email Activity Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div style={{ height: '400px' }}>
+              <Line data={timelineChartData} options={chartOptions} />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Summary Stats */}
       {timeline && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Period Summary</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <StatItem label="Total Sent" value={timeline.total_sent} />
-            <StatItem label="Total Replies" value={timeline.total_replies} />
-            <StatItem label="Total Bounces" value={timeline.total_bounces} />
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Period Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-sm text-slate-500 mb-1">Total Sent</p>
+                <p className="text-2xl font-bold text-slate-900">{timeline.total_sent}</p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-sm text-slate-500 mb-1">Total Replies</p>
+                <p className="text-2xl font-bold text-slate-900">{timeline.total_replies}</p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-sm text-slate-500 mb-1">Total Bounces</p>
+                <p className="text-2xl font-bold text-slate-900">{timeline.total_bounces}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 }
 
-function MetricCard({ title, value, subtitle, icon, color }) {
+function MetricCard({ title, value, subtitle, icon: Icon, color }) {
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -278,25 +351,41 @@ function MetricCard({ title, value, subtitle, icon, color }) {
     red: 'bg-red-50 text-red-600',
   };
 
+  const iconBgClasses = {
+    blue: 'bg-blue-100 text-blue-600',
+    green: 'bg-green-100 text-green-600',
+    purple: 'bg-purple-100 text-purple-600',
+    red: 'bg-red-100 text-red-600',
+  };
+
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-gray-600">{title}</p>
-        <span className="text-2xl">{icon}</span>
-      </div>
-      <p className="text-3xl font-bold text-gray-900">{value.toLocaleString()}</p>
-      {subtitle && (
-        <p className={`text-sm mt-1 ${colorClasses[color]}`}>{subtitle}</p>
-      )}
-    </div>
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-medium text-slate-600">{title}</p>
+          <div className={`p-2 rounded-lg ${iconBgClasses[color]}`}>
+            <Icon className="w-5 h-5" />
+          </div>
+        </div>
+        <p className="text-3xl font-bold text-slate-900">{value.toLocaleString()}</p>
+        {subtitle && (
+          <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-2 ${colorClasses[color]}`}>
+            {subtitle}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-function StatItem({ label, value }) {
+function StatItem({ label, value, icon: Icon }) {
   return (
-    <div>
-      <p className="text-sm text-gray-600">{label}</p>
-      <p className="text-xl font-semibold text-gray-900">{value}</p>
+    <div className="flex items-start gap-3">
+      {Icon && <Icon className="w-5 h-5 text-slate-400 mt-0.5" />}
+      <div>
+        <p className="text-sm text-slate-500">{label}</p>
+        <p className="text-xl font-semibold text-slate-900 mt-1">{value}</p>
+      </div>
     </div>
   );
 }

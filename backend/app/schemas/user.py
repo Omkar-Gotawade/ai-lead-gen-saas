@@ -21,6 +21,7 @@ class UserResponse(BaseModel):
     """Schema for user response."""
     id: UUID
     email: str
+    full_name: Optional[str] = None
     created_at: datetime
     
     class Config:
@@ -36,3 +37,15 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     """Schema for token payload data."""
     email: Optional[str] = None
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating user profile."""
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+
+
+class PasswordChange(BaseModel):
+    """Schema for changing password."""
+    old_password: str
+    new_password: str

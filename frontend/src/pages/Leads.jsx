@@ -1,321 +1,363 @@
-import { useState, useEffect } from 'react'
-import { leadsAPI } from '../api'
-import { getEmailProvider } from '../api/email'
-import CreateLeadModal from '../components/CreateLeadModal'
-import EditLeadModal from '../components/EditLeadModal'
-import DeleteLeadModal from '../components/DeleteLeadModal'
-import CSVUploadModal from '../components/CSVUploadModal'
-import EmailComposer from '../components/EmailComposer'
-import AddToCampaignModal from '../components/AddToCampaignModal'
+import React, { useState, useEffect } from 'react';
+import { 
+  Plus, 
+  Upload, 
+  Users, 
+  Search, 
+  Filter, 
+  MoreHorizontal, 
+  Mail, 
+  Edit2, 
+  Trash2, 
+  Sparkles,
+  CheckSquare,
+  Square,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+import { leadsAPI } from '../api';
+import { getEmailProvider } from '../api/email';
+import CreateLeadModal from '../components/CreateLeadModal';
+import EditLeadModal from '../components/EditLeadModal';
+import DeleteLeadModal from '../components/DeleteLeadModal';
+import CSVUploadModal from '../components/CSVUploadModal';
+import EmailComposer from '../components/EmailComposer';
+import AddToCampaignModal from '../components/AddToCampaignModal';
+
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { Card, CardContent } from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import { Alert, AlertDescription } from '../components/ui/Alert';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 const Leads = () => {
-  const [leads, setLeads] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [pageSize] = useState(50)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [emailProviderConfigured, setEmailProviderConfigured] = useState(false)
+  const [leads, setLeads] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(50);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [emailProviderConfigured, setEmailProviderConfigured] = useState(false);
   
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [showCSVModal, setShowCSVModal] = useState(false)
-  const [showComposer, setShowComposer] = useState(false)
-  const [showCampaignModal, setShowCampaignModal] = useState(false)
-  const [selectedLead, setSelectedLead] = useState(null)
-  const [enrichingLeads, setEnrichingLeads] = useState(new Set())
-  const [selectedLeadIds, setSelectedLeadIds] = useState([])
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCSVModal, setShowCSVModal] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [enrichingLeads, setEnrichingLeads] = useState(new Set());
+  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
 
   useEffect(() => {
-    fetchLeads()
-    checkEmailProvider()
-  }, [page])
+    fetchLeads();
+    checkEmailProvider();
+  }, [page]);
 
   const fetchLeads = async () => {
-    setLoading(true)
-    setError('')
+    setLoading(true);
+    setError('');
     try {
-      const response = await leadsAPI.getLeads(page, pageSize)
-      setLeads(response.data.leads)
-      setTotal(response.data.total)
+      const response = await leadsAPI.getLeads(page, pageSize);
+      setLeads(response.data.leads);
+      setTotal(response.data.total);
     } catch (err) {
-      setError('Failed to fetch leads')
+      setError('Failed to fetch leads');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const checkEmailProvider = async () => {
     try {
-      await getEmailProvider()
-      setEmailProviderConfigured(true)
+      await getEmailProvider();
+      setEmailProviderConfigured(true);
     } catch (err) {
-      setEmailProviderConfigured(false)
+      setEmailProviderConfigured(false);
     }
-  }
+  };
 
   const handleCreateLead = async (data) => {
     try {
-      await leadsAPI.createLead(data)
-      setShowCreateModal(false)
-      fetchLeads()
+      await leadsAPI.createLead(data);
+      setShowCreateModal(false);
+      fetchLeads();
     } catch (err) {
-      throw new Error(err.response?.data?.detail || 'Failed to create lead')
+      throw new Error(err.response?.data?.detail || 'Failed to create lead');
     }
-  }
+  };
 
   const handleEditLead = async (data) => {
     try {
-      await leadsAPI.updateLead(selectedLead.id, data)
-      setShowEditModal(false)
-      setSelectedLead(null)
-      fetchLeads()
+      await leadsAPI.updateLead(selectedLead.id, data);
+      setShowEditModal(false);
+      setSelectedLead(null);
+      fetchLeads();
     } catch (err) {
-      throw new Error(err.response?.data?.detail || 'Failed to update lead')
+      throw new Error(err.response?.data?.detail || 'Failed to update lead');
     }
-  }
+  };
 
   const handleDeleteLead = async () => {
     try {
-      await leadsAPI.deleteLead(selectedLead.id)
-      setShowDeleteModal(false)
-      setSelectedLead(null)
-      fetchLeads()
+      await leadsAPI.deleteLead(selectedLead.id);
+      setShowDeleteModal(false);
+      setSelectedLead(null);
+      fetchLeads();
     } catch (err) {
-      throw new Error(err.response?.data?.detail || 'Failed to delete lead')
+      throw new Error(err.response?.data?.detail || 'Failed to delete lead');
     }
-  }
+  };
 
   const handleCSVUpload = async (file) => {
     try {
-      await leadsAPI.uploadCSV(file)
-      setShowCSVModal(false)
-      fetchLeads()
+      await leadsAPI.uploadCSV(file);
+      setShowCSVModal(false);
+      fetchLeads();
     } catch (err) {
-      throw new Error(err.response?.data?.detail || 'Failed to upload CSV')
+      throw new Error(err.response?.data?.detail || 'Failed to upload CSV');
     }
-  }
+  };
 
   const handleEnrichLead = async (leadId) => {
-    setEnrichingLeads(prev => new Set(prev).add(leadId))
+    setEnrichingLeads(prev => new Set(prev).add(leadId));
     try {
-      await leadsAPI.enrichLead(leadId)
-      // Show success message
+      await leadsAPI.enrichLead(leadId);
       setTimeout(() => {
-        fetchLeads()
+        fetchLeads();
         setEnrichingLeads(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(leadId)
-          return newSet
-        })
-      }, 3000)
+          const newSet = new Set(prev);
+          newSet.delete(leadId);
+          return newSet;
+        });
+      }, 3000);
     } catch (err) {
       setEnrichingLeads(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(leadId)
-        return newSet
-      })
-      alert('Failed to enrich lead')
+        const newSet = new Set(prev);
+        newSet.delete(leadId);
+        return newSet;
+      });
+      alert('Failed to enrich lead');
     }
-  }
+  };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedLeadIds(leads.map(lead => lead.id))
+      setSelectedLeadIds(leads.map(lead => lead.id));
     } else {
-      setSelectedLeadIds([])
+      setSelectedLeadIds([]);
     }
-  }
+  };
 
   const handleSelectLead = (leadId) => {
     setSelectedLeadIds(prev => {
       if (prev.includes(leadId)) {
-        return prev.filter(id => id !== leadId)
+        return prev.filter(id => id !== leadId);
       } else {
-        return [...prev, leadId]
+        return [...prev, leadId];
       }
-    })
-  }
+    });
+  };
 
   const handleCampaignSuccess = () => {
-    setSelectedLeadIds([])
-  }
+    setSelectedLeadIds([]);
+  };
 
-  const totalPages = Math.ceil(total / pageSize)
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900">Leads</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            A list of all leads in your account including their name, email, and company.
-          </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
+          <p className="text-slate-500">Manage and track your potential customers.</p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-2">
+        <div className="flex flex-wrap gap-2">
           {selectedLeadIds.length > 0 && (
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowCampaignModal(true)}
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+              className="text-green-600 border-green-200 hover:bg-green-50"
+              icon={<Users className="w-4 h-4" />}
             >
               Add {selectedLeadIds.length} to Campaign
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="outline"
             onClick={() => setShowCSVModal(true)}
-            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            icon={<Upload className="w-4 h-4" />}
           >
-            Upload CSV
-          </button>
-          <button
+            Import CSV
+          </Button>
+          <Button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            icon={<Plus className="w-4 h-4" />}
           >
-            Add lead
-          </button>
+            Add Lead
+          </Button>
         </div>
       </div>
 
+      {/* Error Message */}
       {error && (
-        <div className="mt-4 rounded-md bg-red-50 p-4">
-          <div className="text-sm text-red-700">{error}</div>
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      {loading ? (
-        <div className="mt-8 text-center">
-          <div className="text-lg">Loading...</div>
-        </div>
-      ) : (
-        <>
-          <div className="mt-8 flex flex-col">
-            <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-              <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-3.5 text-left">
-                          <input
-                            type="checkbox"
-                            checked={selectedLeadIds.length === leads.length && leads.length > 0}
-                            onChange={handleSelectAll}
-                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                          Name
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                          Email
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                          Company
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                          Source
-                        </th>
-                        <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                          <span className="sr-only">Actions</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {leads.map((lead) => (
-                        <tr key={lead.id}>
-                          <td className="px-3 py-4">
+      {/* Main Content */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-12 flex justify-center">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 w-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeadIds.length === leads.length && leads.length > 0}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 font-medium">Name</th>
+                    <th className="px-6 py-4 font-medium">Email</th>
+                    <th className="px-6 py-4 font-medium">Company</th>
+                    <th className="px-6 py-4 font-medium">Source</th>
+                    <th className="px-6 py-4 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {leads.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                        No leads found. Add a new lead or import a CSV to get started.
+                      </td>
+                    </tr>
+                  ) : (
+                    leads.map((lead) => (
+                      <tr key={lead.id} className="bg-white hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
                             <input
                               type="checkbox"
                               checked={selectedLeadIds.includes(lead.id)}
                               onChange={() => handleSelectLead(lead.id)}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                             />
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                            {lead.full_name}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {lead.email}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {lead.company || '-'}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {lead.source || '-'}
-                          </td>
-                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-slate-900">
+                          {lead.full_name}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {lead.email}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {lead.company || <span className="text-slate-400">-</span>}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="secondary" className="capitalize">
+                            {lead.source || 'Manual'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => {
-                                setSelectedLead(lead)
-                                setShowComposer(true)
+                                setSelectedLead(lead);
+                                setShowComposer(true);
                               }}
-                              className="text-blue-600 hover:text-blue-900 mr-4"
+                              className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
+                              title="Compose Email"
                             >
-                              Compose
+                              <Mail className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleEnrichLead(lead.id)}
                               disabled={enrichingLeads.has(lead.id)}
-                              className="text-green-600 hover:text-green-900 mr-4 disabled:opacity-50"
+                              className={`p-1 transition-colors ${
+                                enrichingLeads.has(lead.id) 
+                                  ? 'text-blue-600 animate-pulse' 
+                                  : 'text-slate-400 hover:text-purple-600'
+                              }`}
+                              title="Enrich Lead"
                             >
-                              {enrichingLeads.has(lead.id) ? 'Enriching...' : 'Enrich'}
+                              <Sparkles className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => {
-                                setSelectedLead(lead)
-                                setShowEditModal(true)
+                                setSelectedLead(lead);
+                                setShowEditModal(true);
                               }}
-                              className="text-indigo-600 hover:text-indigo-900 mr-4"
+                              className="p-1 text-slate-400 hover:text-slate-900 transition-colors"
+                              title="Edit"
                             >
-                              Edit
+                              <Edit2 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => {
-                                setSelectedLead(lead)
-                                setShowDeleteModal(true)
+                                setSelectedLead(lead);
+                                setShowDeleteModal(true);
                               }}
-                              className="text-red-600 hover:text-red-900"
+                              className="p-1 text-slate-400 hover:text-red-600 transition-colors"
+                              title="Delete"
                             >
-                              Delete
+                              <Trash2 className="w-4 h-4" />
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
+        </CardContent>
+      </Card>
 
-          {/* Pagination */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to{' '}
-              <span className="font-medium">
-                {Math.min(page * pageSize, total)}
-              </span>{' '}
-              of <span className="font-medium">{total}</span> results
-            </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setPage(page - 1)}
-                disabled={page === 1}
-                className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(page + 1)}
-                disabled={page >= totalPages}
-                className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
+      {/* Pagination */}
+      {!loading && total > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-slate-500">
+            Showing <span className="font-medium text-slate-900">{(page - 1) * pageSize + 1}</span> to{' '}
+            <span className="font-medium text-slate-900">
+              {Math.min(page * pageSize, total)}
+            </span>{' '}
+            of <span className="font-medium text-slate-900">{total}</span> results
           </div>
-        </>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page - 1)}
+              disabled={page === 1}
+              icon={<ChevronLeft className="w-4 h-4" />}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page + 1)}
+              disabled={page >= totalPages}
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Modals */}
@@ -327,8 +369,8 @@ const Leads = () => {
       <EditLeadModal
         isOpen={showEditModal}
         onClose={() => {
-          setShowEditModal(false)
-          setSelectedLead(null)
+          setShowEditModal(false);
+          setSelectedLead(null);
         }}
         onSubmit={handleEditLead}
         lead={selectedLead}
@@ -336,8 +378,8 @@ const Leads = () => {
       <DeleteLeadModal
         isOpen={showDeleteModal}
         onClose={() => {
-          setShowDeleteModal(false)
-          setSelectedLead(null)
+          setShowDeleteModal(false);
+          setSelectedLead(null);
         }}
         onConfirm={handleDeleteLead}
         lead={selectedLead}
@@ -352,13 +394,13 @@ const Leads = () => {
           lead={selectedLead}
           emailProviderConfigured={emailProviderConfigured}
           onClose={() => {
-            setShowComposer(false)
-            setSelectedLead(null)
+            setShowComposer(false);
+            setSelectedLead(null);
           }}
           onSend={(emailData) => {
-            console.log('Email drafted:', emailData)
-            setShowComposer(false)
-            setSelectedLead(null)
+            console.log('Email drafted:', emailData);
+            setShowComposer(false);
+            setSelectedLead(null);
           }}
         />
       )}
@@ -369,7 +411,7 @@ const Leads = () => {
         onSuccess={handleCampaignSuccess}
       />
     </div>
-  )
-}
+  );
+};
 
-export default Leads
+export default Leads;

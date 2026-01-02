@@ -39,3 +39,5 @@ export const leadsAPI = {
   enrichLead: (id) =>
     api.post(`/leads/${id}/enrich`),
 }
+
+export default api

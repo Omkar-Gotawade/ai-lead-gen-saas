@@ -1,6 +1,24 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  Plus, 
+  Play, 
+  Pause, 
+  Edit, 
+  Trash2, 
+  Calendar, 
+  Mail, 
+  ArrowRight,
+  MoreHorizontal
+} from 'lucide-react';
 import { getCampaigns, createCampaign, deleteCampaign, activateCampaign, pauseCampaign } from '../api/campaigns';
+
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import { Alert, AlertDescription } from '../components/ui/Alert';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 function Campaigns() {
   const navigate = useNavigate();
@@ -37,12 +55,13 @@ function Campaigns() {
     e.preventDefault();
     
     if (!newCampaign.name.trim()) {
-      alert('Campaign name is required');
+      setError('Campaign name is required');
       return;
     }
 
     try {
       setIsCreating(true);
+      setError(null);
       await createCampaign({
         name: newCampaign.name,
         description: newCampaign.description,
@@ -51,27 +70,25 @@ function Campaigns() {
       
       setNewCampaign({ name: '', description: '' });
       await fetchCampaigns();
-      alert('Campaign created successfully');
     } catch (err) {
       console.error('Error creating campaign:', err);
-      alert('Failed to create campaign');
+      setError('Failed to create campaign');
     } finally {
       setIsCreating(false);
     }
   };
 
   const handleDeleteCampaign = async (campaignId, campaignName) => {
-    if (!confirm(`Are you sure you want to delete "${campaignName}"?`)) {
+    if (!window.confirm(`Are you sure you want to delete "${campaignName}"?`)) {
       return;
     }
 
     try {
       await deleteCampaign(campaignId);
       await fetchCampaigns();
-      alert('Campaign deleted successfully');
     } catch (err) {
       console.error('Error deleting campaign:', err);
-      alert('Failed to delete campaign');
+      setError('Failed to delete campaign');
     }
   };
 
@@ -83,189 +100,182 @@ function Campaigns() {
     try {
       if (campaign.status === 'active') {
         await pauseCampaign(campaign.id);
-        alert('Campaign paused successfully');
       } else {
         await activateCampaign(campaign.id);
-        alert('Campaign activated successfully');
       }
       await fetchCampaigns();
     } catch (err) {
       console.error('Error updating campaign status:', err);
-      alert('Failed to update campaign status');
+      setError('Failed to update campaign status');
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusVariant = (status) => {
     switch (status) {
       case 'active':
-        return 'bg-green-100 text-green-800';
+        return 'success';
       case 'paused':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'warning';
       case 'draft':
-        return 'bg-gray-100 text-gray-800';
+        return 'secondary';
       case 'completed':
-        return 'bg-blue-100 text-blue-800';
+        return 'default';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'secondary';
     }
   };
 
   return (
-    <div className="px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Email Campaigns</h1>
-        <p className="text-gray-600">Create and manage multi-step email sequences</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Email Campaigns</h1>
+        <p className="text-slate-500">Create and manage multi-step email sequences.</p>
       </div>
 
-        {/* Create Campaign Form */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Create New Campaign</h2>
-          <form onSubmit={handleCreateCampaign} className="space-y-4">
+      {/* Create Campaign Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Campaign</CardTitle>
+        </CardHeader>
+        <form onSubmit={handleCreateCampaign}>
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Campaign Name *
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Q1 Outreach Campaign"
-                  value={newCampaign.name}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Brief description of campaign goals"
-                  value={newCampaign.description}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, description: e.target.value })}
-                />
-              </div>
+              <Input
+                label="Campaign Name"
+                placeholder="e.g., Q1 Outreach Campaign"
+                value={newCampaign.name}
+                onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })}
+                required
+              />
+              <Input
+                label="Description"
+                placeholder="Brief description of campaign goals"
+                value={newCampaign.description}
+                onChange={(e) => setNewCampaign({ ...newCampaign, description: e.target.value })}
+              />
             </div>
-            <div>
-              <button
-                type="submit"
-                disabled={isCreating}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isCreating ? 'Creating...' : 'Create Campaign'}
-              </button>
-            </div>
-          </form>
-        </div>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              type="submit" 
+              isLoading={isCreating} 
+              icon={<Plus className="w-4 h-4" />}
+            >
+              Create Campaign
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
+      {/* Error Display */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {/* Campaigns List */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Loading campaigns...</p>
-          </div>
-        ) : campaigns.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <div className="text-gray-400 mb-4">
-              <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
+      {/* Campaigns List */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-12 flex justify-center">
+              <LoadingSpinner size="lg" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
-            <p className="text-gray-600">Create your first campaign to get started with automated email sequences</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Campaign Control
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {campaigns.map((campaign) => (
-                  <tr key={campaign.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{campaign.name}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600">{campaign.description || '—'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(campaign.status)}`}>
-                        {campaign.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {campaign.status === 'draft' || campaign.status === 'paused' ? (
-                        <button
-                          onClick={() => handleToggleCampaignStatus(campaign)}
-                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 font-medium"
-                          title="Activate Campaign"
-                        >
-                          Activate
-                        </button>
-                      ) : campaign.status === 'active' ? (
-                        <button
-                          onClick={() => handleToggleCampaignStatus(campaign)}
-                          className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 font-medium"
-                          title="Pause Campaign"
-                        >
-                          Pause
-                        </button>
-                      ) : (
-                        <span className="text-sm text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {new Date(campaign.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleEditCampaign(campaign.id)}
-                        className="text-blue-600 hover:text-blue-900 mr-4"
-                      >
-                        Edit Sequence
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </td>
+          ) : campaigns.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-4">
+                <Mail className="w-6 h-6 text-slate-400" />
+              </div>
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No campaigns yet</h3>
+              <p className="text-slate-500 mb-6">Create your first campaign to get started with automated email sequences.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Name</th>
+                    <th className="px-6 py-4 font-medium">Description</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium">Control</th>
+                    <th className="px-6 py-4 font-medium">Created</th>
+                    <th className="px-6 py-4 font-medium text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {campaigns.map((campaign) => (
+                    <tr key={campaign.id} className="bg-white hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {campaign.name}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {campaign.description || <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={getStatusVariant(campaign.status)} className="capitalize">
+                          {campaign.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        {campaign.status === 'draft' || campaign.status === 'paused' ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-600 border-green-200 hover:bg-green-50 h-8"
+                            onClick={() => handleToggleCampaignStatus(campaign)}
+                            icon={<Play className="w-4 h-4" />}
+                          >
+                            Activate
+                          </Button>
+                        ) : campaign.status === 'active' ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-yellow-600 border-yellow-200 hover:bg-yellow-50 h-8"
+                            onClick={() => handleToggleCampaignStatus(campaign)}
+                            icon={<Pause className="w-4 h-4" />}
+                          >
+                            Pause
+                          </Button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-slate-400" />
+                          {new Date(campaign.created_at).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditCampaign(campaign.id)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          >
+                            Edit Sequence
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </Button>
+                          <button
+                            onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
+                            className="p-2 text-slate-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50"
+                            title="Delete Campaign"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

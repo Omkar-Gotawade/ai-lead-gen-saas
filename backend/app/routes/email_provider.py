@@ -179,3 +179,34 @@ async def test_email_provider(
             status_code=500,
             detail=f"Failed to send test email: {str(e)}"
         )
+
+
+@router.delete("/email-provider/me")
+async def delete_email_provider(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete/disconnect email provider configuration.
+    
+    Args:
+        current_user: Authenticated user
+        db: Database session
+        
+    Returns:
+        Success message
+    """
+    provider = db.query(EmailProviderSettings).filter(
+        EmailProviderSettings.user_id == current_user.id
+    ).first()
+    
+    if not provider:
+        raise HTTPException(
+            status_code=404,
+            detail="No email provider configured"
+        )
+    
+    db.delete(provider)
+    db.commit()
+    
+    return {"success": True, "message": "Email provider disconnected successfully"}

@@ -30,6 +30,11 @@ export async function testEmailProvider(data) {
   return response.data;
 }
 
+export async function deleteEmailProvider() {
+  const response = await axios.delete('/api/email-provider/me');
+  return response.data;
+}
+
 export async function getEmailLogs(leadId) {
   const response = await axios.get(`/api/email/logs?lead_id=${leadId}`);
   return response.data;

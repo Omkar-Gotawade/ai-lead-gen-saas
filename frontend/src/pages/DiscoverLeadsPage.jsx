@@ -1,5 +1,24 @@
 import { useState, useEffect } from 'react'
+import { 
+  Search, 
+  MapPin, 
+  Briefcase, 
+  Globe, 
+  Clock, 
+  CheckCircle, 
+  AlertCircle, 
+  Loader2,
+  ArrowRight,
+  History
+} from 'lucide-react'
 import api from '../api/axios'
+
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/Card'
+import Badge from '../components/ui/Badge'
+import { Alert, AlertDescription } from '../components/ui/Alert'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 export default function DiscoverLeadsPage() {
   const [formData, setFormData] = useState({
@@ -79,249 +98,256 @@ export default function DiscoverLeadsPage() {
       const response = await api.get(`/api/lead-discovery/${jobId}`)
       setCurrentJob(response.data.job)
       setJobStatus(response.data)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       setError('Failed to load job details')
     }
   }
 
+  const getStatusVariant = (status) => {
+    switch (status) {
+      case 'completed': return 'success';
+      case 'failed': return 'destructive';
+      case 'running': return 'default';
+      default: return 'secondary';
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Discover Leads</h1>
-
-      {/* Discovery Form */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Start New Discovery</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Keywords *
-            </label>
-            <input
-              type="text"
-              name="keywords"
-              value={formData.keywords}
-              onChange={handleChange}
-              placeholder="e.g., AI software, marketing agency"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Location (optional)
-              </label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="e.g., India, USA"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Industry (optional)
-              </label>
-              <input
-                type="text"
-                name="industry"
-                value={formData.industry}
-                onChange={handleChange}
-                placeholder="e.g., SaaS, E-commerce"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Max Results
-            </label>
-            <input
-              type="number"
-              name="max_results"
-              value={formData.max_results}
-              onChange={handleChange}
-              min="1"
-              max="100"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Discovering...' : 'Discover Leads'}
-          </button>
-        </form>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Discover Leads</h1>
+        <p className="text-slate-500">Find new potential customers using AI-powered search.</p>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-          {error}
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Discovery Form */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Start New Discovery</CardTitle>
+            </CardHeader>
+            <form onSubmit={handleSubmit}>
+              <CardContent className="space-y-4">
+                <Input
+                  label="Keywords"
+                  name="keywords"
+                  value={formData.keywords}
+                  onChange={handleChange}
+                  placeholder="e.g., AI software, marketing agency"
+                  required
+                  icon={<Search className="w-4 h-4" />}
+                />
 
-      {/* Job Status */}
-      {jobStatus && (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Discovery Progress</h2>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Status:</span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                jobStatus.job.status === 'completed' ? 'bg-green-100 text-green-800' :
-                jobStatus.job.status === 'failed' ? 'bg-red-100 text-red-800' :
-                jobStatus.job.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {jobStatus.job.status}
-              </span>
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Location (optional)"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    placeholder="e.g., India, USA"
+                    icon={<MapPin className="w-4 h-4" />}
+                  />
 
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Keywords:</span>
-              <span className="font-medium">{jobStatus.job.keywords}</span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Domains Found:</span>
-              <span className="font-medium">{jobStatus.job.domains_found}</span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Domains Crawled:</span>
-              <span className="font-medium">{jobStatus.job.domains_crawled}</span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Leads Created:</span>
-              <span className="font-medium text-green-600">{jobStatus.job.leads_created}</span>
-            </div>
-
-            {/* Progress Bar */}
-            {jobStatus.job.status === 'running' && (
-              <div className="mt-4">
-                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                  <div
-                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                    style={{ width: `${jobStatus.progress_percent}%` }}
-                  ></div>
+                  <Input
+                    label="Industry (optional)"
+                    name="industry"
+                    value={formData.industry}
+                    onChange={handleChange}
+                    placeholder="e.g., SaaS, E-commerce"
+                    icon={<Briefcase className="w-4 h-4" />}
+                  />
                 </div>
-                <p className="text-sm text-gray-600 mt-1 text-center">
-                  {jobStatus.progress_percent}% complete
-                </p>
-              </div>
-            )}
 
-            {jobStatus.job.error_message && (
-              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded">
-                <p className="text-sm text-red-700">{jobStatus.job.error_message}</p>
-              </div>
-            )}
-          </div>
+                <Input
+                  label="Max Results"
+                  type="number"
+                  name="max_results"
+                  value={formData.max_results}
+                  onChange={handleChange}
+                  min="1"
+                  max="100"
+                />
+              </CardContent>
+              <CardFooter>
+                <Button
+                  type="submit"
+                  isLoading={loading}
+                  className="w-full"
+                  icon={<Globe className="w-4 h-4" />}
+                >
+                  {loading ? 'Discovering...' : 'Discover Leads'}
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
 
-          {/* Discovered Domains Preview */}
-          {jobStatus.discovered_domains.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-3">Discovered Domains</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Emails</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {jobStatus.discovered_domains.map((domain) => (
-                      <tr key={domain.id}>
-                        <td className="px-4 py-2 text-sm">{domain.domain}</td>
-                        <td className="px-4 py-2 text-sm">{domain.company_name || '-'}</td>
-                        <td className="px-4 py-2">
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            domain.status === 'crawled' ? 'bg-green-100 text-green-800' :
-                            domain.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {domain.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-sm">
-                          {domain.emails_found ? domain.emails_found.split(',').length : 0}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {/* Error Display */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
-          {jobStatus.job.status === 'completed' && jobStatus.job.leads_created > 0 && (
-            <div className="mt-4">
-              <a
-                href="/leads"
-                className="inline-block bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
-              >
-                View Leads →
-              </a>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Recent Jobs */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Recent Discovery Jobs</h2>
-        
-        {recentJobs.length === 0 ? (
-          <p className="text-gray-500">No discovery jobs yet. Start one above!</p>
-        ) : (
-          <div className="space-y-3">
-            {recentJobs.map((job) => (
-              <div
-                key={job.id}
-                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleViewJob(job.id)}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium">{job.keywords}</p>
-                    <p className="text-sm text-gray-500">
-                      {job.location && `${job.location} • `}
-                      {new Date(job.created_at).toLocaleDateString()}
+          {/* Job Status */}
+          {jobStatus && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Discovery Progress</span>
+                  <Badge variant={getStatusVariant(jobStatus.job.status)} className="capitalize">
+                    {jobStatus.job.status}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-xs text-slate-500 mb-1">Keywords</p>
+                    <p className="font-medium text-slate-900 truncate" title={jobStatus.job.keywords}>
+                      {jobStatus.job.keywords}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      job.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      job.status === 'failed' ? 'bg-red-100 text-red-800' :
-                      job.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {job.status}
-                    </span>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {job.leads_created} leads
-                    </p>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-xs text-slate-500 mb-1">Domains Found</p>
+                    <p className="font-medium text-slate-900">{jobStatus.job.domains_found}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="text-xs text-slate-500 mb-1">Crawled</p>
+                    <p className="font-medium text-slate-900">{jobStatus.job.domains_crawled}</p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                    <p className="text-xs text-green-600 mb-1">Leads Created</p>
+                    <p className="font-medium text-green-700">{jobStatus.job.leads_created}</p>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+
+                {/* Progress Bar */}
+                {jobStatus.job.status === 'running' && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Progress</span>
+                      <span>{jobStatus.progress_percent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${jobStatus.progress_percent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {jobStatus.job.error_message && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{jobStatus.job.error_message}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Discovered Domains Preview */}
+                {jobStatus.discovered_domains.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-slate-900">Discovered Domains</h3>
+                    <div className="overflow-x-auto border rounded-lg">
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="px-4 py-2 font-medium">Domain</th>
+                            <th className="px-4 py-2 font-medium">Company</th>
+                            <th className="px-4 py-2 font-medium">Status</th>
+                            <th className="px-4 py-2 font-medium">Emails</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {jobStatus.discovered_domains.map((domain) => (
+                            <tr key={domain.id} className="bg-white">
+                              <td className="px-4 py-2 text-slate-900">{domain.domain}</td>
+                              <td className="px-4 py-2 text-slate-600">{domain.company_name || '-'}</td>
+                              <td className="px-4 py-2">
+                                <Badge variant={
+                                  domain.status === 'crawled' ? 'success' :
+                                  domain.status === 'failed' ? 'destructive' : 'secondary'
+                                } className="text-xs">
+                                  {domain.status}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-2 text-slate-600">
+                                {domain.emails_found ? domain.emails_found.split(',').length : 0}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {jobStatus.job.status === 'completed' && jobStatus.job.leads_created > 0 && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="default"
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => window.location.href = '/leads'}
+                      icon={<ArrowRight className="w-4 h-4" />}
+                    >
+                      View Leads
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Recent Jobs Sidebar */}
+        <div className="lg:col-span-1">
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <History className="w-5 h-5 text-slate-500" />
+                Recent Jobs
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {recentJobs.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 text-sm">
+                  No discovery jobs yet. Start one to find leads!
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {recentJobs.map((job) => (
+                    <button
+                      key={job.id}
+                      className="w-full text-left p-4 hover:bg-slate-50 transition-colors focus:outline-none focus:bg-slate-50"
+                      onClick={() => handleViewJob(job.id)}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-slate-900 text-sm truncate max-w-[120px]" title={job.keywords}>
+                          {job.keywords}
+                        </span>
+                        <Badge variant={getStatusVariant(job.status)} className="text-[10px] px-1.5 py-0.5 h-5">
+                          {job.status}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-end">
+                        <div className="text-xs text-slate-500">
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <Clock className="w-3 h-3" />
+                            {new Date(job.created_at).toLocaleDateString()}
+                          </div>
+                          {job.location && <div className="truncate max-w-[100px]">{job.location}</div>}
+                        </div>
+                        <div className="text-xs font-medium text-slate-700">
+                          {job.leads_created} leads
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
