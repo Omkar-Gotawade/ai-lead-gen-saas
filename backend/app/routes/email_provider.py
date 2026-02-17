@@ -116,12 +116,9 @@ async def get_email_provider(
         EmailProviderSettings.user_id == current_user.id
     ).first()
     
-    # If user doesn't have one, use any configured provider as fallback
+    # If user doesn't have one, return None/null (don't throw 404)
     if not provider:
-        provider = db.query(EmailProviderSettings).first()
-    
-    if not provider:
-        raise HTTPException(status_code=404, detail="Email provider not configured")
+        return None
     
     return EmailProviderResponse(
         id=provider.id,

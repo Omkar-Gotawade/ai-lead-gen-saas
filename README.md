@@ -1,6 +1,56 @@
 # AI Lead Generation + Outreach SaaS
 
-A full-stack AI-powered lead generation and outreach platform built with FastAPI, React, PostgreSQL, Redis, and Celery.
+**⚠️ ALPHA RELEASE - Safety First**
+
+This is an **ALPHA release** for controlled testing. Not recommended for production use.
+
+> **🛡️ IMPORTANT**: This platform handles cold email outreach. Misuse can damage your sender reputation permanently. Follow all safety guidelines carefully.
+
+## 📋 Quick Start (3 Minutes)
+
+1. **Start the application**:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Access the app**:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+
+3. **Complete onboarding**:
+   - Sign up at http://localhost:3000/signup
+   - Configure email provider in Settings
+   - Import leads from CSV
+   - Create your first campaign
+
+## ⚠️ Known Limitations (Alpha)
+
+- **Warmup guidance is advisory only** - Not enforced by system
+- **Daily send limits are recommendations** - You must self-monitor
+- **Webhook events require manual SendGrid configuration**
+- **Blacklist monitoring not implemented** - Use external tools (MXToolbox)
+- **No billing integration** - Pricing is informational only
+- **Bounce/spam tracking requires webhook setup** - See `SENDGRID_WEBHOOK_SETUP.md`
+
+## 🛡️ Safe Usage Guidelines
+
+### Critical Safety Rules
+1. **Never use your primary work email** for cold outreach
+2. **Start with 5-10 emails/day** for the first week
+3. **Monitor deliverability page daily** - Watch bounce/spam rates
+4. **Stop immediately if bounce rate > 5%** or spam rate > 0.1%
+5. **Clean your lists** - Remove bounces immediately
+6. **Personalize every email** - Generic blasts harm reputation
+
+### Email Warmup (21 Days Recommended)
+| Week | Daily Limit | Focus |
+|------|-------------|-------|
+| 1 | 10-20 emails | Establish baseline reputation |
+| 2 | 30-50 emails | Gradual volume increase |
+| 3 | 70-100 emails | Near-full capacity |
+
+**⚠️ Exceeding warmup limits risks permanent reputation damage**
 
 ## 🚀 Features
 
@@ -465,52 +515,134 @@ npm run dev
 
 ## 🐛 Troubleshooting
 
+### "Email provider not configured"
+**Problem**: Cannot create campaigns  
+**Solution**:
+1. Go to Settings → Email Provider
+2. Add your SendGrid API key or SMTP credentials
+3. Click "Test Connection" to verify
+4. Try creating campaign again
+
+### High bounce rate (> 5%)
+**Problem**: Deliverability page shows red alert  
+**Solution**:
+1. **STOP all active campaigns immediately**
+2. Go to Webhook Events page
+3. Review bounce reasons
+4. Remove bounced email addresses from your leads list
+5. Use email verification service before next send
+6. Resume with 5-10 verified emails per day
+
+### "No events in webhook page"
+**Problem**: Webhook events showing zero  
+**Solution**:
+1. Follow `SENDGRID_WEBHOOK_SETUP.md` guide
+2. Use ngrok to expose local server: `ngrok http 8000`
+3. Configure webhook URL in SendGrid dashboard
+4. Send test email to trigger events
+
 ### Backend won't start
-- Check if `OPENAI_API_KEY` is set in docker-compose.yml
-- Verify `ENCRYPTION_KEY` is set (generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+- Check if `OPENAI_API_KEY` or `GEMINI_API_KEY` is set in docker-compose.yml
+- Verify `ENCRYPTION_KEY` is set
 - Run `docker-compose logs backend` to see error messages
+- Ensure PostgreSQL is running: `docker ps | grep postgres`
 
 ### Celery worker errors
 - Ensure celery-worker has the same environment variables as backend
 - Check logs: `docker logs leadgen_celery_worker`
 - Verify Redis is running: `docker ps | grep redis`
+- Restart worker: `docker-compose restart celery-worker`
 
 ### Email sending fails
-- Test your SMTP/SendGrid credentials using the "Test Connection" button
-- Check sending logs for error messages
+- Test credentials using "Test Connection" button in Settings
+- Check sending logs: `docker exec leadgen_postgres psql -U postgres -d leadgen_db -c "SELECT * FROM sending_logs ORDER BY created_at DESC LIMIT 10"`
 - Verify sender email is authorized in your email provider
+- Check daily send limits haven't been exceeded
 
 ### Migrations fail
-- Check if migrations are in correct order
-- Run `docker exec leadgen_backend alembic current` to see current version
-- Try `docker exec leadgen_backend alembic stamp head` to mark migrations as applied
+- Check current version: `docker exec leadgen_backend alembic current`
+- View migration history: `docker exec leadgen_backend alembic history`
+- Apply pending migrations: `docker exec leadgen_backend alembic upgrade head`
+- If corrupted, stamp and retry: `docker exec leadgen_backend alembic stamp head`
 
 ### Frontend can't connect to backend
 - Verify backend is running: `docker ps`
-- Check CORS origins in docker-compose.yml include `http://localhost:5173`
-- Clear browser cache and hard refresh
+- Check backend health: http://localhost:8000/docs
+- Check CORS origins in docker-compose.yml include `http://localhost:3000`
+- Clear browser cache (Ctrl+Shift+R)
+- Check browser console for errors (F12)
 
-## 🎯 Next Steps (Future Weeks)
+### Campaign not sending emails
+- Check campaign status is "active"
+- Verify daily limit not exceeded (Deliverability page)
+- Check Celery worker is running: `docker ps | grep celery`
+- View worker logs: `docker logs leadgen_celery_worker --tail 50`
+- Ensure leads have valid email addresses
 
-- **Week 3**: Advanced lead enrichment with third-party APIs (Clearbit, Hunter.io)
-- **Week 4**: Email analytics and open/click tracking
-- **Week 5**: A/B testing for email sequences
-- **Week 6**: Webhooks and Zapier integration
-- **Week 7**: Multi-tenant support and team collaboration
-- **Week 8**: Production deployment with CI/CD
+### Docker containers won't start
+- Check port conflicts: `netstat -ano | findstr :8000`
+- Remove old containers: `docker-compose down -v`
+- Rebuild: `docker-compose up --build`
+- Check disk space: `docker system df`
+- Prune unused data: `docker system prune`
 
-## 📄 License
+## 📚 Additional Documentation
 
-MIT License - Feel free to use this project for learning and commercial purposes.
+- **`SENDGRID_WEBHOOK_SETUP.md`** - Configure webhooks for bounce/spam tracking
+- **`ALPHA_LAUNCH_PLAN.md`** - Complete alpha launch readiness plan
+- **`QA_CHECKLIST.md`** - Testing procedures and validation
+- **`COMPLETION_REPORT.md`** - Feature completion status
+- **`API_REFERENCE.md`** - Detailed API endpoint documentation
 
-## 🤝 Contributing
+## ⚠️ Alpha Testing Guidelines
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+### What to Test
+- ✅ Complete new user onboarding flow
+- ✅ Import leads and create campaigns
+- ✅ AI email generation quality
+- ✅ Email sending with small volumes (5-10/day)
+- ✅ Deliverability monitoring accuracy
+- ✅ Warmup limit warnings
 
-## 📞 Support
+### What NOT to Test
+- ❌ High-volume sending (>100 emails/day)
+- ❌ Production email lists
+- ❌ Real customer outreach (use test accounts)
+- ❌ Billing/payment flows (not implemented)
 
-For issues or questions, please open an issue in the repository.
+### Reporting Issues
+When you find a bug, include:
+1. Steps to reproduce
+2. Expected vs actual behavior
+3. Browser console errors (F12)
+4. Backend logs if applicable
+5. Screenshots/recordings if helpful
 
----
+## 🎯 Roadmap
 
-**Built with ❤️ using FastAPI, React, and Docker**
+### Beta Phase (Next)
+- ✅ Automatic send throttling
+- ✅ Enhanced blacklist monitoring
+- ✅ Email open/click tracking
+- ✅ A/B testing for subject lines
+- ✅ Automatic list cleaning
+
+### v1.0 (Future)
+- Multi-user organizations
+- Billing integration
+- Advanced analytics
+- Zapier/webhook integrations
+- Mobile app
+
+## 🔐 Security
+
+- Passwords hashed using bcrypt
+- JWT tokens for stateless authentication
+- CORS configured for frontend origin
+- Email provider credentials encrypted with Fernet
+- Environment variables for sensitive data
+- Protected API routes require valid JWT
+- SQL injection protection via SQLAlchemy ORM
+- Rate limiting on authentication endpoints
+
+**⚠️ Security Note**: This is an alpha release. Do not use in production without additional security hardening.

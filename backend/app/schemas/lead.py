@@ -11,6 +11,10 @@ class LeadCreate(BaseModel):
     last_name: str
     email: EmailStr
     company: Optional[str] = None
+    title: Optional[str] = None
+    industry: Optional[str] = None
+    location: Optional[str] = None
+    research_notes: Optional[str] = None
     source: Optional[str] = "manual"
     linkedin_url: Optional[str] = None
     job_title: Optional[str] = None
@@ -24,6 +28,10 @@ class LeadUpdate(BaseModel):
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
     company: Optional[str] = None
+    title: Optional[str] = None
+    industry: Optional[str] = None
+    location: Optional[str] = None
+    research_notes: Optional[str] = None
     source: Optional[str] = None
     linkedin_url: Optional[str] = None
     job_title: Optional[str] = None
@@ -40,6 +48,10 @@ class LeadResponse(BaseModel):
     full_name: str
     email: str
     company: Optional[str] = None
+    title: Optional[str] = None
+    industry: Optional[str] = None
+    location: Optional[str] = None
+    research_notes: Optional[str] = None
     source: Optional[str] = None
     enriched_data: Optional[Dict[str, Any]] = None
     linkedin_url: Optional[str] = None

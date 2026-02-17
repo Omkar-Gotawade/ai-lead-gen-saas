@@ -67,6 +67,8 @@ const Settings = () => {
     fetchProfile();
     fetchEmailProvider();
     fetchAiConfig();
+    // Clear any existing messages when component mounts
+    setMessage({ type: '', text: '' });
   }, []);
 
   const fetchProfile = async () => {
@@ -89,7 +91,7 @@ const Settings = () => {
         console.log('Fetched email provider:', res.data);
         setEmailProvider(res.data);
         setProviderForm({
-          type: res.data.type || 'smtp',
+          type: res.data.provider_type || 'smtp',
           smtp_server: res.data.smtp_server || '',
           smtp_port: res.data.smtp_port || 587,
           smtp_username: res.data.smtp_username || '',
@@ -98,10 +100,13 @@ const Settings = () => {
           from_email: res.data.from_email || '',
           from_name: res.data.from_name || ''
         });
+        // Clear any error messages when provider is loaded successfully
+        setMessage({ type: '', text: '' });
       }
     } catch (error) {
-      // It's okay if no provider exists yet
+      // It's okay if no provider exists yet - don't show error message
       console.log('No email provider configured');
+      // Don't set an error message here
     }
   };
 
@@ -153,10 +158,10 @@ const Settings = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      const payload = { type: providerForm.type };
+      const payload = { provider_type: providerForm.type };
       
       if (providerForm.type === 'smtp') {
-        payload.smtp_server = providerForm.smtp_server;
+        payload.smtp_host = providerForm.smtp_server;
         payload.smtp_port = providerForm.smtp_port;
         payload.smtp_username = providerForm.smtp_username;
         // Only send password if it's not empty (for updates)
@@ -186,12 +191,18 @@ const Settings = () => {
 
       console.log('Sending payload:', { ...payload, smtp_password: payload.smtp_password ? '****' : undefined, sendgrid_api_key: payload.sendgrid_api_key ? '****' : undefined });
       
-      const response = await api.post('/api/email-provider/configure', payload);
+      const response = await api.post('/api/email-provider/connect', payload);
       setMessage({ type: 'success', text: 'Email provider configured successfully' });
-      fetchEmailProvider();
+      
+      // Reload the provider data after successful save
+      await fetchEmailProvider();
     } catch (error) {
       console.error('Error configuring provider:', error);
-      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to configure email provider' });
+      const errorDetail = error.response?.data?.detail;
+      const errorMessage = typeof errorDetail === 'string' 
+        ? errorDetail 
+        : (Array.isArray(errorDetail) ? errorDetail.map(e => e.msg || e).join(', ') : 'Failed to configure email provider');
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -392,10 +403,10 @@ const Settings = () => {
             <Alert className="bg-green-50 border-green-200 text-green-800">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription>
-                Active Provider: <strong>{emailProvider.type?.toUpperCase() || 'N/A'}</strong>
-                {emailProvider.type === 'sendgrid' && emailProvider.from_email && ` (${emailProvider.from_email})`}
-                {emailProvider.type === 'smtp' && emailProvider.smtp_server && ` (${emailProvider.smtp_server})`}
-                {emailProvider.type === 'smtp' && !emailProvider.smtp_server && emailProvider.from_email && ` (${emailProvider.from_email})`}
+                Active Provider: <strong>{emailProvider.provider_type?.toUpperCase() || 'N/A'}</strong>
+                {emailProvider.provider_type === 'sendgrid' && emailProvider.from_email && ` (${emailProvider.from_email})`}
+                {emailProvider.provider_type === 'smtp' && emailProvider.smtp_server && ` (${emailProvider.smtp_server})`}
+                {emailProvider.provider_type === 'smtp' && !emailProvider.smtp_server && emailProvider.from_email && ` (${emailProvider.from_email})`}
               </AlertDescription>
             </Alert>
           )}

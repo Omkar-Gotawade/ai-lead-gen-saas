@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   Plus, 
   Play, 
@@ -9,16 +9,21 @@ import {
   Calendar, 
   Mail, 
   ArrowRight,
-  MoreHorizontal
+  MoreHorizontal,
+  AlertTriangle,
+  Info,
+  Shield
 } from 'lucide-react';
 import { getCampaigns, createCampaign, deleteCampaign, activateCampaign, pauseCampaign } from '../api/campaigns';
+import axios from '../api/axios';
 
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
-import { Alert, AlertDescription } from '../components/ui/Alert';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import EmptyState from '../components/ui/EmptyState';
 
 function Campaigns() {
   const navigate = useNavigate();
@@ -26,6 +31,8 @@ function Campaigns() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [hasEmailProvider, setHasEmailProvider] = useState(true);
+  const [warmupStatus, setWarmupStatus] = useState(null);
   
   // Form state for creating new campaign
   const [newCampaign, setNewCampaign] = useState({
@@ -35,7 +42,31 @@ function Campaigns() {
 
   useEffect(() => {
     fetchCampaigns();
+    checkEmailProvider();
+    fetchWarmupStatus();
   }, []);
+
+  const checkEmailProvider = async () => {
+    try {
+      const response = await axios.get('/api/email-provider/me');
+      // Backend returns null if no provider, or an object with configured=true if provider exists
+      const hasProvider = response.data !== null && response.data !== undefined;
+      setHasEmailProvider(hasProvider);
+      console.log('Email provider check:', { hasProvider, data: response.data });
+    } catch (err) {
+      console.error('Error checking email provider:', err);
+      setHasEmailProvider(false);
+    }
+  };
+
+  const fetchWarmupStatus = async () => {
+    try {
+      const response = await axios.get('/api/deliverability/warmup/status');
+      setWarmupStatus(response.data);
+    } catch (err) {
+      console.error('Error fetching warmup status:', err);
+    }
+  };
 
   const fetchCampaigns = async () => {
     try {
@@ -54,10 +85,22 @@ function Campaigns() {
   const handleCreateCampaign = async (e) => {
     e.preventDefault();
     
+    if (!hasEmailProvider) {
+      setError('Email provider must be configured before creating campaigns');
+      return;
+    }
+
     if (!newCampaign.name.trim()) {
       setError('Campaign name is required');
       return;
     }
+
+    if (newCampaign.name.trim().length < 3) {
+      setError('Campaign name must be at least 3 characters');
+      return;
+    }
+
+    if (isCreating) return; // Prevent double-submit
 
     try {
       setIsCreating(true);
@@ -72,14 +115,15 @@ function Campaigns() {
       await fetchCampaigns();
     } catch (err) {
       console.error('Error creating campaign:', err);
-      setError('Failed to create campaign');
+      setError(err.response?.data?.detail || 'Failed to create campaign');
     } finally {
       setIsCreating(false);
     }
   };
 
   const handleDeleteCampaign = async (campaignId, campaignName) => {
-    if (!window.confirm(`Are you sure you want to delete "${campaignName}"?`)) {
+    const confirmMessage = `Delete "${campaignName}" campaign? This cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
@@ -88,7 +132,7 @@ function Campaigns() {
       await fetchCampaigns();
     } catch (err) {
       console.error('Error deleting campaign:', err);
-      setError('Failed to delete campaign');
+      setError(err.response?.data?.detail || 'Failed to delete campaign');
     }
   };
 
@@ -97,6 +141,19 @@ function Campaigns() {
   };
 
   const handleToggleCampaignStatus = async (campaign) => {
+    const isActivating = campaign.status !== 'active';
+    
+    if (isActivating) {
+      // Show confirmation with warmup info
+      const confirmMessage = warmupStatus 
+        ? `Activate "${campaign.name}"?\n\nWarmup Day ${warmupStatus.warmup_day}/21\nDaily Limit: ${warmupStatus.daily_limit} emails\nUsed Today: ${warmupStatus.used_today}/${warmupStatus.daily_limit}`
+        : `Activate "${campaign.name}"?`;
+      
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+    }
+
     try {
       if (campaign.status === 'active') {
         await pauseCampaign(campaign.id);
@@ -106,7 +163,7 @@ function Campaigns() {
       await fetchCampaigns();
     } catch (err) {
       console.error('Error updating campaign status:', err);
-      setError('Failed to update campaign status');
+      setError(err.response?.data?.detail || 'Failed to update campaign status');
     }
   };
 
@@ -132,6 +189,46 @@ function Campaigns() {
         <h1 className="text-2xl font-bold text-slate-900">Email Campaigns</h1>
         <p className="text-slate-500">Create and manage multi-step email sequences.</p>
       </div>
+
+      {/* Email Provider Warning */}
+      {!hasEmailProvider && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Email Provider Required</AlertTitle>
+          <AlertDescription>
+            You need to configure an email provider before creating campaigns.{' '}
+            <Link to="/settings" className="font-medium underline">
+              Go to Settings →
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Warmup Warning */}
+      {warmupStatus && warmupStatus.warmup_day < 14 && warmupStatus.usage_percentage > 80 && (
+        <Alert variant="warning">
+          <Shield className="h-4 w-4" />
+          <AlertTitle>Approaching Daily Limit</AlertTitle>
+          <AlertDescription>
+            You've sent {warmupStatus.used_today} of {warmupStatus.daily_limit} recommended emails today ({warmupStatus.usage_percentage}%).
+            Consider pausing sends until tomorrow to protect your sender reputation.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Warmup Info for New Users */}
+      {warmupStatus && warmupStatus.warmup_day < 7 && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Email Warmup in Progress (Day {warmupStatus.warmup_day}/21)</AlertTitle>
+          <AlertDescription>
+            Start slow to build sender reputation. Recommended limit today: {warmupStatus.daily_limit} emails.
+            <Link to="/deliverability" className="ml-2 font-medium underline">
+              View Deliverability Dashboard →
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Create Campaign Form */}
       <Card>
@@ -159,11 +256,17 @@ function Campaigns() {
           <CardFooter>
             <Button 
               type="submit" 
-              isLoading={isCreating} 
+              isLoading={isCreating}
+              disabled={isCreating || !hasEmailProvider}
               icon={<Plus className="w-4 h-4" />}
             >
-              Create Campaign
+              {isCreating ? 'Creating...' : 'Create Campaign'}
             </Button>
+            {!hasEmailProvider && (
+              <p className="text-sm text-slate-500 ml-4">
+                Configure email provider in Settings first
+              </p>
+            )}
           </CardFooter>
         </form>
       </Card>
@@ -183,13 +286,22 @@ function Campaigns() {
               <LoadingSpinner size="lg" />
             </div>
           ) : campaigns.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-4">
-                <Mail className="w-6 h-6 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-900 mb-2">No campaigns yet</h3>
-              <p className="text-slate-500 mb-6">Create your first campaign to get started with automated email sequences.</p>
-            </div>
+            <EmptyState
+              icon={<Mail />}
+              title="No campaigns yet"
+              description="Create your first campaign to start sending personalized email sequences."
+              actions={[
+                { 
+                  label: "Create Campaign", 
+                  onClick: () => document.querySelector('input[placeholder*="Campaign Name"]')?.focus(),
+                  variant: "primary",
+                  icon: <Plus className="w-4 h-4" />,
+                  disabled: !hasEmailProvider
+                }
+              ]}
+              helpText="💡 Tip: Start with 5-10 highly relevant leads for your first campaign."
+              warning={!hasEmailProvider ? "Email provider not configured - Go to Settings first" : null}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">

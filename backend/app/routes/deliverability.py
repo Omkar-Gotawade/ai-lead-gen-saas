@@ -41,7 +41,7 @@ def _get_warmup_data(db: Session, current_user: User) -> Dict:
     sent_today = db.query(SendingLog).filter(
         SendingLog.user_id == current_user.id,
         SendingLog.created_at >= datetime.combine(today, datetime.min.time()),
-        SendingLog.status == "sent"
+        SendingLog.status == "SENT"
     ).count()
     
     # Check if user has a warmup domain
@@ -94,106 +94,358 @@ async def get_deliverability_health(
     # Get warmup status
     warmup_status = _get_warmup_data(db, current_user)
     
-    # Calculate bounce rate
+    # Calculate real metrics for scoring
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     total_sent = db.query(SendingLog).filter(
         SendingLog.user_id == current_user.id,
         SendingLog.created_at >= thirty_days_ago,
-        SendingLog.status == "sent"
+        SendingLog.status == "SENT"
     ).count()
     
-    # For now, assume no bounces (would integrate with webhook bounce tracking)
-    bounce_count = 0
-    bounce_rate = (bounce_count / total_sent * 100) if total_sent > 0 else 0
+    failed_sends = db.query(SendingLog).filter(
+        SendingLog.user_id == current_user.id,
+        SendingLog.created_at >= thirty_days_ago,
+        SendingLog.status == "FAILED"
+    ).count()
     
-    # Calculate health score components
-    domain_auth_score = 30  # Assume configured (would check DNS)
-    bounce_score = 25 if bounce_rate < 2 else (15 if bounce_rate < 5 else 0)
-    spam_score = 20  # Assume no complaints (would check)
-    blacklist_score = 15  # Assume clean (would check)
-    warmup_score = 10 if warmup_status['warmup_day'] >= 7 else 5
+    # Check if email provider is connected
+    from ..models.email_provider import EmailProviderSettings
+    provider_connected = db.query(EmailProviderSettings).filter(
+        EmailProviderSettings.user_id == current_user.id
+    ).first() is not None
     
-    health_score = domain_auth_score + bounce_score + spam_score + blacklist_score + warmup_score
+    # Calculate bounce and spam metrics from inbound_events
+    from ..models.inbound_event import InboundEvent
     
-    # Determine status
-    if health_score >= 80:
+    bounce_count = db.query(InboundEvent).filter(
+        InboundEvent.org_id == current_user.id,
+        InboundEvent.event_type == 'bounce',
+        InboundEvent.created_at >= thirty_days_ago
+    ).count()
+    
+    spam_count = db.query(InboundEvent).filter(
+        InboundEvent.org_id == current_user.id,
+        InboundEvent.event_type == 'spam',
+        InboundEvent.created_at >= thirty_days_ago
+    ).count()
+    
+    delivered_count = db.query(InboundEvent).filter(
+        InboundEvent.org_id == current_user.id,
+        InboundEvent.event_type == 'delivered',
+        InboundEvent.created_at >= thirty_days_ago
+    ).count()
+    
+    # Calculate rates
+    total_delivered_or_bounced = delivered_count + bounce_count
+    if total_delivered_or_bounced > 0:
+        bounce_rate = (bounce_count / total_delivered_or_bounced) * 100
+    else:
+        bounce_rate = 0.0
+    
+    if total_sent > 0:
+        spam_rate = (spam_count / total_sent) * 100
+    else:
+        spam_rate = 0.0
+    
+    has_webhook_data = bounce_count > 0 or spam_count > 0 or delivered_count > 0
+    
+    # ========================================
+    # HEALTH SCORE - COMPREHENSIVE METRICS
+    # ========================================
+    # Score based on all available metrics:
+    # 1. Warmup progress (20 points)
+    # 2. Send volume management (20 points)
+    # 3. Provider connection (15 points)
+    # 4. Send success ratio (15 points)
+    # 5. Bounce rate (15 points)
+    # 6. Spam complaint rate (15 points)
+    
+    # 1. Warmup progress (0-20 points)
+    if warmup_status['warmup_day'] >= 21:
+        warmup_score = 20  # Completed
+    elif warmup_status['warmup_day'] >= 14:
+        warmup_score = 17  # Almost done
+    elif warmup_status['warmup_day'] >= 7:
+        warmup_score = 14  # Halfway
+    else:
+        warmup_score = 10  # Just started
+    
+    # 2. Send volume management (0-20 points)
+    usage_pct = warmup_status['usage_percentage']
+    if usage_pct <= 80:
+        volume_score = 20  # Safe usage
+    elif usage_pct <= 95:
+        volume_score = 14  # Approaching limit
+    else:
+        volume_score = 5  # Over limit
+    
+    # 3. Provider connection (0-15 points)
+    provider_score = 15 if provider_connected else 0
+    
+    # 4. Send success ratio (0-15 points)
+    if total_sent > 0:
+        success_rate = ((total_sent - failed_sends) / total_sent) * 100
+        if success_rate >= 95:
+            success_score = 15
+        elif success_rate >= 85:
+            success_score = 12
+        elif success_rate >= 70:
+            success_score = 8
+        else:
+            success_score = 0
+    else:
+        success_score = 15  # No sends yet, no failures
+    
+    # 5. Bounce rate (0-15 points)
+    if bounce_rate == 0:
+        bounce_score = 15
+    elif bounce_rate < 2:
+        bounce_score = 13  # Excellent
+    elif bounce_rate < 5:
+        bounce_score = 8  # Acceptable
+    elif bounce_rate < 10:
+        bounce_score = 3  # Warning
+    else:
+        bounce_score = 0  # Critical
+    
+    # 6. Spam complaint rate (0-15 points)
+    if spam_rate == 0:
+        spam_score = 15
+    elif spam_rate < 0.1:
+        spam_score = 13  # Excellent
+    elif spam_rate < 0.5:
+        spam_score = 8  # Acceptable
+    elif spam_rate < 1:
+        spam_score = 3  # Warning
+    else:
+        spam_score = 0  # Critical
+    
+    health_score = warmup_score + volume_score + provider_score + success_score + bounce_score + spam_score
+    
+    # Determine status based on comprehensive metrics
+    if health_score >= 85:
         status = 'good'
-    elif health_score >= 60:
+    elif health_score >= 70:
         status = 'warning'
     else:
         status = 'critical'
     
-    # System checks
+    # Confidence level: "high" if we have webhook data, "partial" otherwise
+    if has_webhook_data:
+        score_confidence = 'high'
+        confidence_note = 'High confidence - Score based on comprehensive metrics including webhook data.'
+    else:
+        score_confidence = 'partial'
+        confidence_note = 'Partial confidence - No webhook events received yet. Configure SendGrid webhooks for complete tracking.'
+    
+    # System checks - HONEST about implementation status
     checks = {
-        'domain_auth': {
-            'status': 'pass',
-            'message': 'Domain authentication configured'
+        'provider_connection': {
+            'status': 'pass' if provider_connected else 'fail',
+            'message': 'Email provider connected and configured' if provider_connected else 'No email provider configured',
+            'implemented': True
         },
         'warmup': {
             'status': 'warning' if warmup_status['warmup_day'] < 14 else 'pass',
-            'message': f"Warmup in progress - Day {warmup_status['warmup_day']} of 21"
+            'message': f"Day {warmup_status['warmup_day']} of 21 (recommended warmup period)",
+            'note': 'Advisory only - not enforced by provider',
+            'implemented': True
         },
-        'blacklist': {
-            'status': 'pass',
-            'message': 'Not on any known blacklists'
+        'send_success': {
+            'status': 'pass' if (total_sent == 0 or success_rate >= 85) else 'warning',
+            'message': f"{success_rate:.1f}% successful sends" if total_sent > 0 else 'No sends yet',
+            'implemented': True
         },
         'bounce_rate': {
             'status': 'pass' if bounce_rate < 2 else ('warning' if bounce_rate < 5 else 'fail'),
-            'message': f"{bounce_rate:.1f}% bounce rate (target: <2%)"
+            'message': f"{bounce_rate:.1f}% bounce rate ({bounce_count} bounces / {total_delivered_or_bounced} delivered)" if total_delivered_or_bounced > 0 else 'No delivery events yet',
+            'note': 'Based on webhook events' if bounce_count > 0 else None,
+            'implemented': True
+        },
+        'spam_complaints': {
+            'status': 'pass' if spam_rate < 0.1 else ('warning' if spam_rate < 0.5 else 'fail'),
+            'message': f"{spam_rate:.2f}% spam rate ({spam_count} complaints / {total_sent} sent)" if total_sent > 0 else 'No sends yet',
+            'note': 'Based on webhook events' if spam_count > 0 else None,
+            'implemented': True
+        },
+        'blacklist_status': {
+            'status': 'unknown',
+            'message': 'Basic check only - Full monitoring not implemented',
+            'note': 'Use external tools like MXToolbox for comprehensive checks',
+            'implemented': False
         }
     }
     
-    # Generate recommendations
+    # Generate comprehensive, actionable recommendations
     recommendations = []
-    if warmup_status['usage_percentage'] > 80:
-        recommendations.append('Approaching daily send limit - consider pacing campaigns')
-    if warmup_status['warmup_day'] < 14:
-        recommendations.append('Continue daily sending to complete warmup schedule')
-    if bounce_rate > 2:
-        recommendations.append(f'Clean list to reduce {bounce_rate:.1f}% bounce rate')
+    warnings = []
     
-    # Add default recommendations
-    if not recommendations:
-        recommendations = [
-            'Maintain consistent sending schedule',
-            'Monitor bounce rates daily',
-            'Keep subject lines under 50 characters'
-        ]
+    # Critical warnings first
+    if not provider_connected:
+        warnings.append('⚠️ No email provider configured - Cannot send emails')
     
-    # Spam triggers (mock for now - would analyze recent emails)
-    spam_reasons = []
+    if warmup_status['usage_percentage'] > 95:
+        warnings.append('⚠️ Exceeded recommended daily limit - High risk of reputation damage')
+    elif warmup_status['usage_percentage'] > 80:
+        warnings.append('⚠️ Approaching recommended daily send limit')
+    
+    # Bounce rate warnings
+    if bounce_rate > 10:
+        warnings.append(f'🚨 CRITICAL: Bounce rate is {bounce_rate:.1f}% (should be <2%)')
+        recommendations.append('URGENT: Stop sending immediately and clean your email list')
+    elif bounce_rate > 5:
+        warnings.append(f'⚠️ High bounce rate: {bounce_rate:.1f}% (should be <2%)')
+        recommendations.append('Review and clean your email list - Remove invalid addresses')
+    
+    # Spam rate warnings
+    if spam_rate > 1:
+        warnings.append(f'🚨 CRITICAL: Spam complaint rate is {spam_rate:.2f}% (should be <0.1%)')
+        recommendations.append('URGENT: Review email content and sending practices')
+    elif spam_rate > 0.5:
+        warnings.append(f'⚠️ High spam rate: {spam_rate:.2f}% (should be <0.1%)')
+        recommendations.append('Improve email relevance and personalization')
+    
+    # Actionable recommendations
+    if warmup_status['warmup_day'] < 21:
+        recommendations.append(f"Continue warmup: Send consistently for {21 - warmup_status['warmup_day']} more days")
+    
+    if total_sent == 0:
+        recommendations.append('Send test emails to verify your configuration')
+    
+    if failed_sends > 0 and total_sent > 0:
+        fail_rate = (failed_sends / (total_sent + failed_sends)) * 100
+        if fail_rate > 10:
+            recommendations.append(f'High failure rate ({fail_rate:.1f}%) - Check email provider credentials')
+    
+    # Best practice reminders
+    if not has_webhook_data:
+        recommendations.append('⚠️ Configure SendGrid webhooks for complete bounce & spam tracking')
+    
+    if bounce_rate < 2 and spam_rate < 0.1:
+        recommendations.append('✅ Excellent delivery metrics - Keep up the good practices!')
+    
+    recommendations.append('Verify email list quality before sending campaigns')
+    recommendations.append('Test emails with mail-tester.com before bulk sends')
+    
+    # Advisory notices
+    advisory_notices = [
+        {
+            'type': 'info',
+            'message': 'Daily send limits are advisory only - not enforced automatically'
+        }
+    ]
+    
+    if has_webhook_data:
+        advisory_notices.append({
+            'type': 'success',
+            'message': 'Webhook events are being tracked - Bounce and spam metrics are accurate'
+        })
+    else:
+        advisory_notices.append({
+            'type': 'warning',
+            'message': 'Configure SendGrid webhooks for real-time bounce and spam tracking'
+        })
+    
+    advisory_notices.append({
+        'type': 'info',
+        'message': 'Use external tools (MXToolbox, mail-tester.com) to verify email health'
+    })
     
     return {
         'score': health_score,
         'status': status,
+        'score_confidence': score_confidence,
+        'confidence_note': confidence_note,
         'checks': checks,
         'daily_limit': {
             'sent': warmup_status['used_today'],
             'limit': warmup_status['daily_limit'],
-            'next_limit': warmup_status['next_day_limit']
+            'next_limit': warmup_status['next_day_limit'],
+            'note': 'Recommended safe limit - Not enforced by provider'
         },
         'recommendations': recommendations,
-        'spam_reasons': spam_reasons
+        'warnings': warnings,
+        'advisory_notices': advisory_notices,
+        'metrics_status': {
+            'implemented': ['warmup_tracking', 'send_volume', 'provider_connection', 'send_success_rate', 'bounce_tracking', 'spam_complaints'],
+            'not_implemented': ['blacklist_monitoring', 'open_tracking', 'click_tracking']
+        },
+        'metrics': {
+            'bounce_rate': round(bounce_rate, 2),
+            'spam_rate': round(spam_rate, 3),
+            'bounce_count': bounce_count,
+            'spam_count': spam_count,
+            'delivered_count': delivered_count,
+            'has_webhook_data': has_webhook_data
+        }
     }
 
 
-@router.post("/auto-fix")
-async def auto_fix_issues(
+@router.post("/safety-diagnostics")
+@router.post("/auto-fix")  # Keep old endpoint for compatibility
+async def run_safety_diagnostics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
-    Automatically fix common deliverability issues.
-    Currently a placeholder for future implementation.
+    Run safety diagnostics and provide manual action recommendations.
+    Does NOT automatically fix issues - provides guidance only.
     """
+    from ..models.email_provider import EmailProviderSettings
+    
+    # Check provider connection
+    provider = db.query(EmailProviderSettings).filter(
+        EmailProviderSettings.user_id == current_user.id
+    ).first()
+    
+    # Check recent send activity
+    today = date.today()
+    sent_today = db.query(SendingLog).filter(
+        SendingLog.user_id == current_user.id,
+        SendingLog.created_at >= datetime.combine(today, datetime.min.time())
+    ).count()
+    
+    passed_checks = []
+    risky_behaviors = []
+    manual_actions = []
+    
+    # Run diagnostics
+    if provider:
+        passed_checks.append('✅ Email provider is configured')
+    else:
+        risky_behaviors.append('❌ No email provider configured')
+        manual_actions.append('Configure an email provider in Settings')
+    
+    warmup = db.query(EmailWarmupDomain).filter(
+        EmailWarmupDomain.org_id == current_user.id
+    ).first()
+    
+    if warmup and sent_today > warmup.daily_limit:
+        risky_behaviors.append(f'❌ Exceeded daily recommended limit ({sent_today}/{warmup.daily_limit})')
+        manual_actions.append('Wait until tomorrow before sending more emails')
+    elif warmup and sent_today > warmup.daily_limit * 0.9:
+        risky_behaviors.append(f'⚠️ Approaching daily limit ({sent_today}/{warmup.daily_limit})')
+        manual_actions.append('Pace remaining sends throughout the day')
+    else:
+        passed_checks.append('✅ Send volume within recommended limits')
+    
+    if sent_today > 0:
+        passed_checks.append('✅ Active sending schedule maintained')
+    
+    # Always include these reminders
+    manual_actions.extend([
+        'Verify email list quality manually',
+        'Check your email provider dashboard for bounce/spam metrics',
+        'Test emails with mail-tester.com before bulk campaigns',
+        'Monitor your domain reputation using MXToolbox'
+    ])
+    
     return {
-        'status': 'success',
-        'message': 'Auto-fix completed',
-        'fixes_applied': [
-            'Verified DNS configuration',
-            'Checked sending limits',
-            'Reviewed recent campaigns'
-        ]
+        'diagnostic_complete': True,
+        'passed_checks': passed_checks,
+        'risky_behaviors': risky_behaviors,
+        'manual_actions_required': manual_actions,
+        'note': 'This tool does NOT automatically fix issues. Please review manual actions and implement them yourself.'
     }
 
 

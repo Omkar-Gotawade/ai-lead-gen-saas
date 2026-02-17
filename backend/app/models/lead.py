@@ -31,6 +31,10 @@ class Lead(Base):
     company_size = Column(String(100), nullable=True)  # e.g., "1-10", "11-50", "51-200"
     linkedin_headline = Column(String(500), nullable=True)
     
+    # Enhanced fields for better email personalization
+    location = Column(String(255), nullable=True)  # City, State/Country
+    research_notes = Column(Text, nullable=True)  # Manual research findings for personalization
+    
     # Week 3: Bounce and do-not-contact tracking
     do_not_contact = Column(Boolean, default=False, nullable=False, index=True)
     bounce_reason = Column(String(255), nullable=True)

@@ -36,26 +36,29 @@ export default function Deliverability() {
       setHealthScore(response.data);
     } catch (error) {
       console.error('Error fetching health score:', error);
-      // Use mock data if API not ready
+      // Fallback to safe mock data if API fails
       setHealthScore({
-        score: 85,
-        status: 'good',
+        score: 70,
+        status: 'warning',
+        score_confidence: 'partial',
+        confidence_note: 'Partial confidence - Limited metrics available',
         checks: {
-          domain_auth: { status: 'pass', message: 'Domain is properly configured' },
-          warmup: { status: 'warning', message: 'Warmup in progress - Day 5 of 14' },
-          blacklist: { status: 'pass', message: 'Not on any blacklists' },
-          bounce_rate: { status: 'warning', message: '4% bounce rate (target: <2%)' }
+          provider_connection: { status: 'pass', message: 'Email provider configured', implemented: true },
+          warmup: { status: 'warning', message: 'Day 5 of 21 (recommended)', note: 'Advisory only', implemented: true },
+          send_success: { status: 'pass', message: '95% successful sends', implemented: true },
+          bounce_rate: { status: 'inactive', message: 'Not implemented yet', note: 'Simulated', implemented: false },
+          spam_complaints: { status: 'inactive', message: 'Requires webhook setup', note: 'Simulated', implemented: false },
+          blacklist_status: { status: 'unknown', message: 'Basic check only', note: 'Not fully implemented', implemented: false }
         },
-        daily_limit: { sent: 45, limit: 50, next_limit: 55 },
+        daily_limit: { sent: 35, limit: 50, next_limit: 55, note: 'Recommended - not enforced' },
         recommendations: [
-          'Reduce sending speed to avoid spam triggers',
-          'Clean 12 invalid email addresses from your list',
-          'Avoid using spam trigger words in subject lines'
+          'Continue warmup: Send consistently for 16 more days',
+          'Verify email list quality before sending campaigns'
         ],
-        spam_reasons: [
-          { reason: 'Used word "free" 5 times', severity: 'high' },
-          { reason: 'No unsubscribe link in 3 recent emails', severity: 'high' },
-          { reason: 'Short email body (< 50 words)', severity: 'medium' }
+        warnings: [],
+        advisory_notices: [
+          { type: 'info', message: 'Daily limits are advisory only' },
+          { type: 'warning', message: 'Bounce tracking not yet implemented' }
         ]
       });
     } finally {
@@ -63,16 +66,36 @@ export default function Deliverability() {
     }
   };
 
-  const handleAutoFix = async () => {
+  const handleSafetyDiagnostics = async () => {
     setFixing(true);
     setMessage(null);
     try {
-      await axios.post('/api/deliverability/auto-fix');
-      setMessage({ type: 'success', text: 'Auto-fix completed! Your email health has been improved.' });
-      fetchHealthScore();
+      const response = await axios.post('/api/deliverability/safety-diagnostics');
+      const data = response.data;
+      
+      let messageText = 'Diagnostics complete.\n\n';
+      
+      if (data.passed_checks && data.passed_checks.length > 0) {
+        messageText += 'Passed:\n' + data.passed_checks.join('\n') + '\n\n';
+      }
+      
+      if (data.risky_behaviors && data.risky_behaviors.length > 0) {
+        messageText += 'Issues Found:\n' + data.risky_behaviors.join('\n') + '\n\n';
+      }
+      
+      if (data.manual_actions_required && data.manual_actions_required.length > 0) {
+        messageText += 'Manual Actions Required:\n' + data.manual_actions_required.slice(0, 3).join('\n');
+      }
+      
+      setMessage({ 
+        type: data.risky_behaviors && data.risky_behaviors.length > 0 ? 'warning' : 'success', 
+        text: messageText
+      });
     } catch (error) {
-      setMessage({ type: 'warning', text: 'Auto-fix completed with some warnings.' });
-      fetchHealthScore();
+      setMessage({ 
+        type: 'warning', 
+        text: 'Diagnostics completed with warnings. Please check your email provider manually.' 
+      });
     } finally {
       setFixing(false);
     }
@@ -93,6 +116,9 @@ export default function Deliverability() {
   const getStatusIcon = (status) => {
     if (status === 'pass') return <CheckCircle className="w-5 h-5 text-green-500" />;
     if (status === 'warning') return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+    if (status === 'fail') return <XCircle className="w-5 h-5 text-red-500" />;
+    if (status === 'inactive') return <Info className="w-5 h-5 text-gray-400" />;
+    if (status === 'unknown') return <Info className="w-5 h-5 text-slate-400" />;
     return <XCircle className="w-5 h-5 text-red-500" />;
   };
 
@@ -131,8 +157,14 @@ export default function Deliverability() {
         {/* Health Score Card */}
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Overall Health Score</CardTitle>
-            <CardDescription>Based on multiple deliverability factors</CardDescription>
+            <CardTitle>Health Score</CardTitle>
+            <CardDescription className="space-y-1">
+              <span className="block">Based on implemented metrics only</span>
+              <span className="inline-flex items-center gap-1 text-xs text-yellow-600">
+                <AlertTriangle className="w-3 h-3" />
+                Confidence: {healthScore.score_confidence || 'partial'}
+              </span>
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center py-6">
             <div className="relative flex items-center justify-center w-40 h-40 rounded-full border-8 border-slate-100 mb-4">
@@ -145,6 +177,11 @@ export default function Deliverability() {
                 </Badge>
               </div>
             </div>
+            {healthScore.confidence_note && (
+              <p className="text-xs text-center text-slate-500 mb-4 px-2">
+                {healthScore.confidence_note}
+              </p>
+            )}
             <div className="w-full space-y-4 mt-4">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Daily Limit Used</span>
@@ -155,23 +192,30 @@ export default function Deliverability() {
               <div className="w-full bg-slate-100 rounded-full h-2">
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${(healthScore.daily_limit.sent / healthScore.daily_limit.limit) * 100}%` }}
+                  style={{ width: `${Math.min(100, (healthScore.daily_limit.sent / healthScore.daily_limit.limit) * 100)}%` }}
                 />
               </div>
               <p className="text-xs text-slate-500 text-center">
-                Next limit increase: {healthScore.daily_limit.next_limit} emails/day
+                {healthScore.daily_limit.note || 'Recommended safe limit - Not enforced'}
+              </p>
+              <p className="text-xs text-slate-400 text-center">
+                Next limit: {healthScore.daily_limit.next_limit} emails/day
               </p>
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex-col gap-2">
             <Button 
               className="w-full" 
-              onClick={handleAutoFix}
+              onClick={handleSafetyDiagnostics}
               isLoading={fixing}
-              icon={<Zap className="w-4 h-4" />}
+              icon={<Shield className="w-4 h-4" />}
+              variant="outline"
             >
-              Auto-Fix Issues
+              Run Safety Diagnostics
             </Button>
+            <p className="text-xs text-center text-slate-500">
+              Does not auto-fix - Provides manual guidance
+            </p>
           </CardFooter>
         </Card>
 
@@ -181,33 +225,51 @@ export default function Deliverability() {
           <Card>
             <CardHeader>
               <CardTitle>System Checks</CardTitle>
+              <CardDescription>Implementation status shown for each check</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-slate-200">
                 {Object.entries(healthScore.checks).map(([key, check]) => (
-                  <div key={key} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(check.status)}
-                      <div>
-                        <h4 className="text-sm font-medium text-slate-900 capitalize">
-                          {key.replace('_', ' ')}
-                        </h4>
-                        <p className="text-sm text-slate-500">{check.message}</p>
+                  <div key={key} className="p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3 flex-1">
+                        {getStatusIcon(check.status)}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-sm font-medium text-slate-900 capitalize">
+                              {key.replace(/_/g, ' ')}
+                            </h4>
+                            {check.implemented === false && (
+                              <Badge variant="secondary" className="text-xs">
+                                Not Implemented
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-600">{check.message}</p>
+                          {check.note && (
+                            <p className="text-xs text-yellow-600 mt-1 flex items-start gap-1">
+                              <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              {check.note}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <Badge variant={
+                        check.status === 'pass' ? 'success' : 
+                        check.status === 'warning' ? 'warning' : 
+                        check.status === 'fail' ? 'destructive' :
+                        'secondary'
+                      }>
+                        {check.status}
+                      </Badge>
                     </div>
-                    <Badge variant={
-                      check.status === 'pass' ? 'success' : 
-                      check.status === 'warning' ? 'warning' : 'destructive'
-                    }>
-                      {check.status}
-                    </Badge>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Recommendations */}
+          {/* Recommendations and Advisory Notices */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -217,8 +279,21 @@ export default function Deliverability() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                {healthScore.warnings && healthScore.warnings.length > 0 && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <h5 className="text-sm font-semibold text-red-900 mb-2">Warnings</h5>
+                    <ul className="space-y-2">
+                      {healthScore.warnings.map((warning, i) => (
+                        <li key={i} className="flex gap-2 text-sm text-red-700">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          {warning}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <ul className="space-y-3">
-                  {healthScore.recommendations.map((rec, i) => (
+                  {healthScore.recommendations && healthScore.recommendations.map((rec, i) => (
                     <li key={i} className="flex gap-2 text-sm text-slate-600">
                       <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                       {rec}
@@ -231,18 +306,23 @@ export default function Deliverability() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <AlertOctagon className="w-5 h-5 text-red-600" />
-                  Spam Triggers
+                  <AlertOctagon className="w-5 h-5 text-yellow-600" />
+                  Advisory Notices
                 </CardTitle>
+                <CardDescription className="text-xs">
+                  Important limitations to be aware of
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
-                  {healthScore.spam_reasons.map((reason, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-slate-600">
+                  {healthScore.advisory_notices && healthScore.advisory_notices.map((notice, i) => (
+                    <li key={i} className="flex gap-2 text-sm">
                       <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                        reason.severity === 'high' ? 'bg-red-500' : 'bg-yellow-500'
+                        notice.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                       }`} />
-                      <span>{reason.reason}</span>
+                      <span className={notice.type === 'warning' ? 'text-yellow-700' : 'text-slate-600'}>
+                        {notice.message}
+                      </span>
                     </li>
                   ))}
                 </ul>
