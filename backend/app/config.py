@@ -36,10 +36,17 @@ class Settings(BaseSettings):
     DEFAULT_ORG_ID: str = "00000000-0000-0000-0000-000000000000"
     
     # v1: Lead Discovery & Enrichment - READ FROM .env FILE
-    SERP_API_KEY: str = ""  # Optional: For better search results
+    SERP_API_KEY: str = ""  # Optional: SerpAPI key for better search results
     ENRICHMENT_API_KEY: str = ""  # For LinkedIn enrichment (Clearbit/Apollo/Snov)
     ENRICHMENT_PROVIDER: str = "clearbit"  # clearbit, apollo, or snov
     # Note: Company enrichment uses GEMINI_API_KEY (already configured above)
+
+    # People Search APIs - READ FROM .env FILE
+    PDL_API_KEY: str = ""         # People Data Labs (primary, free 1k/mo) - https://app.peopledatalabs.com/signup
+    ICYPEAS_API_KEY: str = ""     # Icypeas (free 5k/mo, Gmail OK) - https://app.icypeas.com → Settings → API
+    APOLLO_API_KEY: str = ""      # Apollo.io people search (paid API plan needed)
+    SNOV_CLIENT_ID: str = ""      # Snov.io OAuth2 client ID (secondary) - https://app.snov.io
+    SNOV_CLIENT_SECRET: str = ""  # Snov.io OAuth2 client secret
     
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v):
@@ -51,6 +58,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

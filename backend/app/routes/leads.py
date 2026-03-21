@@ -21,19 +21,19 @@ async def list_leads(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get paginated list of leads.
-    
+    Get paginated list of leads for the current user.
+
     Args:
         page: Page number (default: 1)
         page_size: Number of leads per page (default: 50)
         db: Database session
         current_user: Authenticated user
-        
+
     Returns:
         LeadListResponse: Paginated list of leads
     """
     lead_service = LeadService(db)
-    result = lead_service.get_leads(page=page, page_size=page_size)
+    result = lead_service.get_leads(page=page, page_size=page_size, org_id=current_user.id)
     return result
 
 
@@ -70,28 +70,28 @@ async def get_lead(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get a single lead by ID.
-    
+    Get a single lead by ID (only if owned by current user).
+
     Args:
         lead_id: Lead UUID
         db: Database session
         current_user: Authenticated user
-        
+
     Returns:
         LeadResponse: Lead information
-        
+
     Raises:
-        HTTPException: If lead not found
+        HTTPException: If lead not found or not authorized
     """
     lead_service = LeadService(db)
-    lead = lead_service.get_lead(lead_id)
-    
+    lead = lead_service.get_lead(lead_id, org_id=current_user.id)
+
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lead not found"
         )
-    
+
     return lead
 
 
@@ -103,29 +103,31 @@ async def update_lead(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Update a lead.
-    
+    Update a lead (only if owned by current user).
+
     Args:
         lead_id: Lead UUID
         lead_data: Lead update data
         db: Database session
         current_user: Authenticated user
-        
+
     Returns:
         LeadResponse: Updated lead information
-        
+
     Raises:
-        HTTPException: If lead not found
+        HTTPException: If lead not found or not authorized
     """
     lead_service = LeadService(db)
-    lead = lead_service.update_lead(lead_id, lead_data)
-    
-    if not lead:
+    # First verify ownership
+    existing_lead = lead_service.get_lead(lead_id, org_id=current_user.id)
+    if not existing_lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lead not found"
         )
-    
+
+    lead = lead_service.update_lead(lead_id, lead_data, user_id=current_user.id)
+
     return lead
 
 
@@ -136,19 +138,27 @@ async def delete_lead(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Delete a lead.
-    
+    Delete a lead (only if owned by current user).
+
     Args:
         lead_id: Lead UUID
         db: Database session
         current_user: Authenticated user
-        
+
     Raises:
-        HTTPException: If lead not found
+        HTTPException: If lead not found or not authorized
     """
     lead_service = LeadService(db)
+    # First verify ownership
+    existing_lead = lead_service.get_lead(lead_id, org_id=current_user.id)
+    if not existing_lead:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found"
+        )
+
     success = lead_service.delete_lead(lead_id)
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

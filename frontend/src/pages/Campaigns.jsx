@@ -183,213 +183,199 @@ function Campaigns() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Email Campaigns</h1>
-        <p className="text-slate-500">Create and manage multi-step email sequences.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="page-title">Campaigns</h1>
+          <p className="page-subtitle mt-0.5">Create and manage multi-step email sequences</p>
+        </div>
       </div>
 
-      {/* Email Provider Warning */}
+      {/* Alerts */}
       {!hasEmailProvider && (
         <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Email Provider Required</AlertTitle>
+          <AlertTitle>Email provider required</AlertTitle>
           <AlertDescription>
-            You need to configure an email provider before creating campaigns.{' '}
-            <Link to="/settings" className="font-medium underline">
-              Go to Settings →
-            </Link>
+            Configure your SMTP or email provider in{' '}
+            <Link to="/settings" className="font-semibold underline">Settings</Link>{' '}
+            before creating campaigns.
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Warmup Warning */}
       {warmupStatus && warmupStatus.warmup_day < 14 && warmupStatus.usage_percentage > 80 && (
         <Alert variant="warning">
-          <Shield className="h-4 w-4" />
-          <AlertTitle>Approaching Daily Limit</AlertTitle>
+          <AlertTitle>Approaching daily limit</AlertTitle>
           <AlertDescription>
-            You've sent {warmupStatus.used_today} of {warmupStatus.daily_limit} recommended emails today ({warmupStatus.usage_percentage}%).
-            Consider pausing sends until tomorrow to protect your sender reputation.
+            {warmupStatus.used_today}/{warmupStatus.daily_limit} emails sent today ({warmupStatus.usage_percentage}%).
+            Pause sends to protect sender reputation.
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Warmup Info for New Users */}
       {warmupStatus && warmupStatus.warmup_day < 7 && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>Email Warmup in Progress (Day {warmupStatus.warmup_day}/21)</AlertTitle>
+        <Alert variant="info">
+          <AlertTitle>Warmup in progress — Day {warmupStatus.warmup_day}/21</AlertTitle>
           <AlertDescription>
-            Start slow to build sender reputation. Recommended limit today: {warmupStatus.daily_limit} emails.
-            <Link to="/deliverability" className="ml-2 font-medium underline">
-              View Deliverability Dashboard →
-            </Link>
+            Recommended limit: <strong>{warmupStatus.daily_limit}</strong> emails today.{' '}
+            <Link to="/deliverability" className="font-semibold underline">View Deliverability →</Link>
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Create Campaign Form */}
+      {/* Create form */}
       <Card>
         <CardHeader>
-          <CardTitle>Create New Campaign</CardTitle>
+          <CardTitle>New Campaign</CardTitle>
         </CardHeader>
         <form onSubmit={handleCreateCampaign}>
-          <CardContent className="space-y-4">
+          <CardContent className="pt-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Campaign Name"
-                placeholder="e.g., Q1 Outreach Campaign"
+                placeholder="e.g., Q1 Outreach"
                 value={newCampaign.name}
                 onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })}
                 required
               />
               <Input
-                label="Description"
+                label="Description (optional)"
                 placeholder="Brief description of campaign goals"
                 value={newCampaign.description}
                 onChange={(e) => setNewCampaign({ ...newCampaign, description: e.target.value })}
               />
             </div>
           </CardContent>
-          <CardFooter>
-            <Button 
-              type="submit" 
-              isLoading={isCreating}
+          <CardFooter className="gap-3 border-t border-ink-50 mt-0 pt-4">
+            <Button
+              type="submit"
+              size="sm"
+              loading={isCreating}
               disabled={isCreating || !hasEmailProvider}
-              icon={<Plus className="w-4 h-4" />}
+              icon={<Plus className="w-3.5 h-3.5" />}
             >
-              {isCreating ? 'Creating...' : 'Create Campaign'}
+              {isCreating ? 'Creating…' : 'Create Campaign'}
             </Button>
             {!hasEmailProvider && (
-              <p className="text-sm text-slate-500 ml-4">
-                Configure email provider in Settings first
-              </p>
+              <p className="text-xs text-ink-400">Configure email provider in Settings first</p>
             )}
           </CardFooter>
         </form>
       </Card>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {/* Campaigns List */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-12 flex justify-center">
-              <LoadingSpinner size="lg" />
+      {/* Campaigns table */}
+      <Card className="overflow-hidden">
+        {loading ? (
+          <LoadingSpinner size="md" text="Loading campaigns…" />
+        ) : campaigns.length === 0 ? (
+          <div className="py-16 flex flex-col items-center gap-3 text-center">
+            <div className="w-12 h-12 rounded-full bg-ink-100 flex items-center justify-center">
+              <Mail className="w-5 h-5 text-ink-400" />
             </div>
-          ) : campaigns.length === 0 ? (
-            <EmptyState
-              icon={<Mail />}
-              title="No campaigns yet"
-              description="Create your first campaign to start sending personalized email sequences."
-              actions={[
-                { 
-                  label: "Create Campaign", 
-                  onClick: () => document.querySelector('input[placeholder*="Campaign Name"]')?.focus(),
-                  variant: "primary",
-                  icon: <Plus className="w-4 h-4" />,
-                  disabled: !hasEmailProvider
-                }
-              ]}
-              helpText="💡 Tip: Start with 5-10 highly relevant leads for your first campaign."
-              warning={!hasEmailProvider ? "Email provider not configured - Go to Settings first" : null}
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-6 py-4 font-medium">Name</th>
-                    <th className="px-6 py-4 font-medium">Description</th>
-                    <th className="px-6 py-4 font-medium">Status</th>
-                    <th className="px-6 py-4 font-medium">Control</th>
-                    <th className="px-6 py-4 font-medium">Created</th>
-                    <th className="px-6 py-4 font-medium text-right">Actions</th>
+            <div>
+              <p className="font-semibold text-ink-700">No campaigns yet</p>
+              <p className="text-sm text-ink-400 mt-0.5">Create your first campaign above to get started</p>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                  <th>Control</th>
+                  <th>Created</th>
+                  <th className="text-right pr-5">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map((campaign) => (
+                  <tr key={campaign.id}>
+                    <td className="font-medium text-ink-800">{campaign.name}</td>
+                    <td className="text-ink-500 max-w-xs truncate">
+                      {campaign.description || <span className="text-ink-300">—</span>}
+                    </td>
+                    <td>
+                      <Badge
+                        variant={
+                          campaign.status === 'active' ? 'success'
+                          : campaign.status === 'paused' ? 'warning'
+                          : campaign.status === 'completed' ? 'info'
+                          : 'default'
+                        }
+                        dot
+                        size="xs"
+                        className="capitalize"
+                      >
+                        {campaign.status}
+                      </Badge>
+                    </td>
+                    <td>
+                      {campaign.status === 'draft' || campaign.status === 'paused' ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleToggleCampaignStatus(campaign)}
+                          icon={<Play className="w-3 h-3" />}
+                          className="border-success/30 text-emerald-700 hover:bg-success/8"
+                        >
+                          Activate
+                        </Button>
+                      ) : campaign.status === 'active' ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleToggleCampaignStatus(campaign)}
+                          icon={<Pause className="w-3 h-3" />}
+                          className="border-warning/30 text-amber-700 hover:bg-warning/8"
+                        >
+                          Pause
+                        </Button>
+                      ) : (
+                        <span className="text-ink-300 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="text-ink-500 text-xs">
+                      {new Date(campaign.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="text-right pr-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => handleEditCampaign(campaign.id)}
+                          className="text-brand-600 hover:bg-brand-50"
+                        >
+                          Edit
+                          <ArrowRight className="w-3 h-3 ml-1" />
+                        </Button>
+                        <button
+                          onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
+                          className="p-1.5 rounded-md text-ink-400 hover:text-danger hover:bg-danger/8 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {campaigns.map((campaign) => (
-                    <tr key={campaign.id} className="bg-white hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900">
-                        {campaign.name}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {campaign.description || <span className="text-slate-400">—</span>}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(campaign.status)} className="capitalize">
-                          {campaign.status}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        {campaign.status === 'draft' || campaign.status === 'paused' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600 border-green-200 hover:bg-green-50 h-8"
-                            onClick={() => handleToggleCampaignStatus(campaign)}
-                            icon={<Play className="w-4 h-4" />}
-                          >
-                            Activate
-                          </Button>
-                        ) : campaign.status === 'active' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-yellow-600 border-yellow-200 hover:bg-yellow-50 h-8"
-                            onClick={() => handleToggleCampaignStatus(campaign)}
-                            icon={<Pause className="w-4 h-4" />}
-                          >
-                            Pause
-                          </Button>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-slate-400" />
-                          {new Date(campaign.created_at).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEditCampaign(campaign.id)}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          >
-                            Edit Sequence
-                            <ArrowRight className="w-4 h-4 ml-2" />
-                          </Button>
-                          <button
-                            onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
-                            className="p-2 text-slate-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50"
-                            title="Delete Campaign"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );
 }
 
 export default Campaigns;
+

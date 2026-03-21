@@ -1,4 +1,5 @@
 """Email provider configuration routes."""
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -95,7 +96,7 @@ async def connect_email_provider(
     )
 
 
-@router.get("/email-provider/me", response_model=EmailProviderResponse)
+@router.get("/email-provider/me", response_model=Optional[EmailProviderResponse])
 async def get_email_provider(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)

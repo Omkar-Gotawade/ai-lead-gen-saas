@@ -172,28 +172,49 @@ class DomainCrawler:
             
             # Parse HTML
             soup = BeautifulSoup(content, 'html.parser')
-            
-            # Remove script and style tags
+
+            # --- Pass 1: scan raw HTML for emails (catches JS vars, data-* attrs, etc.) ---
+            raw_html = content.decode('utf-8', errors='ignore')
+            emails_from_raw = set(self.EMAIL_PATTERN.findall(raw_html))
+
+            # --- Pass 2: extract mailto: href links ---
+            emails_from_mailto = set()
+            for tag in soup.find_all('a', href=True):
+                href = tag['href']
+                if href.lower().startswith('mailto:'):
+                    # Strip "mailto:" prefix and any query params (?subject=...)
+                    address = href[7:].split('?')[0].strip()
+                    if address:
+                        emails_from_mailto.add(address)
+
+            # Remove script and style tags before extracting visible text
             for script in soup(['script', 'style', 'nav', 'footer', 'header']):
                 script.decompose()
-            
+
             # Extract title
             title_tag = soup.find('title')
             if title_tag:
                 result['title'] = title_tag.get_text().strip()
-            
+
             # Extract text
             text = soup.get_text(separator='\n', strip=True)
             result['text'] = self._clean_text(text)
-            
-            # Extract emails
-            result['emails'] = set(self.EMAIL_PATTERN.findall(text))
-            
+
+            # --- Merge all email sources ---
+            emails_from_text = set(self.EMAIL_PATTERN.findall(text))
+            all_emails = emails_from_text | emails_from_mailto | emails_from_raw
+
             # Filter out common non-contact emails
             result['emails'] = {
-                email for email in result['emails']
+                email for email in all_emails
                 if not self._is_excluded_email(email)
             }
+
+            if emails_from_mailto:
+                logger.debug(f"mailto: links found at {url}: {emails_from_mailto}")
+            extra = emails_from_raw - emails_from_text
+            if extra:
+                logger.debug(f"Emails found via raw HTML scan at {url}: {extra}")
             
             result['success'] = True
             

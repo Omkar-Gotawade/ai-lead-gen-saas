@@ -131,19 +131,20 @@ export default function Deliverability() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Email Health Dashboard</h1>
-          <p className="text-slate-500">Monitor and improve your email deliverability.</p>
+          <h1 className="page-title">Email Deliverability</h1>
+          <p className="page-subtitle mt-0.5">Monitor and improve your sender reputation</p>
         </div>
         <Button
           variant="outline"
+          size="sm"
           onClick={fetchHealthScore}
-          icon={<RefreshCw className="w-4 h-4" />}
+          icon={<RefreshCw className="w-3.5 h-3.5" />}
         >
-          Refresh Analysis
+          Refresh
         </Button>
       </div>
 

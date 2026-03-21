@@ -165,22 +165,21 @@ export default function MetricsDashboard() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <LoadingSpinner size="lg" />
+      <div className="flex justify-center items-center h-screen">
+        <LoadingSpinner size="lg" text="Loading analytics…" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-4">
+      <div className="p-6 space-y-3 max-w-xl">
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800">
-          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+        <Alert variant="warning">
           <AlertDescription>
-            <strong>Quick Fix:</strong> Click the "Logout" button (top right) and login again to refresh your session.
+            <strong>Quick fix:</strong> Sign out and back in to refresh your session.
           </AlertDescription>
         </Alert>
       </div>
@@ -188,39 +187,40 @@ export default function MetricsDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
-          <p className="text-slate-500">Track your campaign performance and engagement.</p>
+          <h1 className="page-title">Analytics</h1>
+          <p className="page-subtitle mt-0.5">Track campaign performance and engagement</p>
         </div>
-        
-        {/* Date Range Picker */}
-        <div className="flex flex-wrap gap-4 items-end bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-          <div className="w-full sm:w-auto">
-            <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3 bg-surface border border-ink-100 rounded-xl px-4 py-3 shadow-soft">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">From</label>
             <input
               type="date"
               value={dateRange.since}
               onChange={(e) => setDateRange({ ...dateRange, since: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-sm border border-ink-200 rounded-lg px-3 py-1.5 bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
-          <div className="w-full sm:w-auto">
-            <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">To</label>
             <input
               type="date"
               value={dateRange.until}
               onChange={(e) => setDateRange({ ...dateRange, until: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-sm border border-ink-200 rounded-lg px-3 py-1.5 bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
-          <div className="w-full sm:w-auto">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Granularity</label>
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="text-sm border border-ink-200 rounded-lg px-3 py-1.5 bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
             >
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
@@ -229,163 +229,111 @@ export default function MetricsDashboard() {
         </div>
       </div>
 
-      {/* Overview Cards */}
+      {/* KPI cards */}
       {overview && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            title="Emails Sent"
-            value={overview.emails_sent}
-            icon={Mail}
-            color="blue"
-          />
-          <MetricCard
-            title="Delivered"
-            value={overview.emails_delivered}
-            subtitle={`${((overview.emails_delivered / overview.emails_sent) * 100 || 0).toFixed(1)}% delivery rate`}
-            icon={CheckCircle}
-            color="green"
-          />
-          <MetricCard
-            title="Replies"
-            value={overview.replies}
-            subtitle={`${overview.reply_rate}% reply rate`}
-            icon={MessageSquare}
-            color="purple"
-          />
-          <MetricCard
-            title="Bounces"
-            value={overview.bounces}
-            subtitle={`${overview.bounce_rate}% bounce rate`}
-            icon={AlertTriangle}
-            color="red"
-          />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard title="Emails Sent"  value={overview.emails_sent}            icon={Mail}          accent="brand"   />
+          <MetricCard title="Delivered"    value={overview.emails_delivered}        icon={CheckCircle}   accent="success"
+            sub={`${((overview.emails_delivered / overview.emails_sent) * 100 || 0).toFixed(1)}% rate`} />
+          <MetricCard title="Replies"      value={overview.replies}                 icon={MessageSquare} accent="purple"
+            sub={`${overview.reply_rate}% reply rate`} />
+          <MetricCard title="Bounces"      value={overview.bounces}                 icon={AlertTriangle} accent="danger"
+            sub={`${overview.bounce_rate}% bounce rate`} />
         </div>
       )}
 
-      {/* Additional Stats */}
+      {/* Secondary stats */}
       {overview && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Activity className="w-5 h-5 text-slate-500" />
-              Additional Metrics
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-ink-400" />
+              Engagement Details
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <StatItem 
-                label="Unique Leads Contacted" 
-                value={overview.unique_leads_contacted} 
-                icon={Users}
-              />
-              <StatItem 
-                label="Avg Opens per Lead" 
-                value="-" 
-                icon={TrendingUp}
-              />
-              <StatItem 
-                label="Best Performing Day" 
-                value="-" 
-                icon={Calendar}
-              />
-              <StatItem 
-                label="Response Time (avg)" 
-                value="-" 
-                icon={Clock}
-              />
+              {[
+                { label: 'Unique Leads Contacted', value: overview.unique_leads_contacted, icon: Users },
+                { label: 'Avg Opens per Lead', value: '—', icon: TrendingUp },
+                { label: 'Best Performing Day', value: '—', icon: Calendar },
+                { label: 'Avg Response Time', value: '—', icon: Clock },
+              ].map(({ label, value, icon: Icon }) => (
+                <div key={label} className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-ink-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-ink-400">{label}</p>
+                    <p className="text-lg font-semibold text-ink-800 mt-0.5">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Timeline Chart */}
+      {/* Timeline chart */}
       {timelineChartData && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <BarChart2 className="w-5 h-5 text-slate-500" />
+            <CardTitle className="flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-ink-400" />
               Email Activity Timeline
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div style={{ height: '400px' }}>
+            <div style={{ height: '320px' }}>
               <Line data={timelineChartData} options={chartOptions} />
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Summary Stats */}
+      {/* Period summary */}
       {timeline && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Period Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                <p className="text-sm text-slate-500 mb-1">Total Sent</p>
-                <p className="text-2xl font-bold text-slate-900">{timeline.total_sent}</p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                <p className="text-sm text-slate-500 mb-1">Total Replies</p>
-                <p className="text-2xl font-bold text-slate-900">{timeline.total_replies}</p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                <p className="text-sm text-slate-500 mb-1">Total Bounces</p>
-                <p className="text-2xl font-bold text-slate-900">{timeline.total_bounces}</p>
-              </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'Total Sent',    value: timeline.total_sent },
+            { label: 'Total Replies', value: timeline.total_replies },
+            { label: 'Total Bounces', value: timeline.total_bounces },
+          ].map(({ label, value }) => (
+            <div key={label} className="stat-card">
+              <p className="text-xs font-medium text-ink-400">{label}</p>
+              <p className="text-3xl font-bold text-ink-900 mt-2">{value?.toLocaleString() ?? 0}</p>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function MetricCard({ title, value, subtitle, icon: Icon, color }) {
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-green-50 text-green-600',
-    purple: 'bg-purple-50 text-purple-600',
-    red: 'bg-red-50 text-red-600',
+function MetricCard({ title, value, sub, icon: Icon, accent = 'brand' }) {
+  const accentMap = {
+    brand:   { bg: 'bg-brand-50',   icon: 'text-brand-600',   badge: 'bg-brand-100 text-brand-700' },
+    success: { bg: 'bg-success/8',  icon: 'text-emerald-600', badge: 'bg-success/10 text-emerald-700' },
+    purple:  { bg: 'bg-purple-50',  icon: 'text-purple-600',  badge: 'bg-purple-100 text-purple-700' },
+    danger:  { bg: 'bg-danger/8',   icon: 'text-red-600',     badge: 'bg-danger/10 text-red-700' },
   };
-
-  const iconBgClasses = {
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-green-100 text-green-600',
-    purple: 'bg-purple-100 text-purple-600',
-    red: 'bg-red-100 text-red-600',
-  };
+  const c = accentMap[accent] || accentMap.brand;
 
   return (
     <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-slate-600">{title}</p>
-          <div className={`p-2 rounded-lg ${iconBgClasses[color]}`}>
-            <Icon className="w-5 h-5" />
+      <CardContent>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-ink-500 uppercase tracking-wide">{title}</p>
+          <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center`}>
+            <Icon className={`w-4 h-4 ${c.icon}`} />
           </div>
         </div>
-        <p className="text-3xl font-bold text-slate-900">{value.toLocaleString()}</p>
-        {subtitle && (
-          <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-2 ${colorClasses[color]}`}>
-            {subtitle}
-          </div>
+        <p className="text-3xl font-bold text-ink-900">{typeof value === 'number' ? value.toLocaleString() : '0'}</p>
+        {sub && (
+          <span className={`inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-full ${c.badge}`}>{sub}</span>
         )}
       </CardContent>
     </Card>
   );
 }
 
-function StatItem({ label, value, icon: Icon }) {
-  return (
-    <div className="flex items-start gap-3">
-      {Icon && <Icon className="w-5 h-5 text-slate-400 mt-0.5" />}
-      <div>
-        <p className="text-sm text-slate-500">{label}</p>
-        <p className="text-xl font-semibold text-slate-900 mt-1">{value}</p>
-      </div>
-    </div>
-  );
-}

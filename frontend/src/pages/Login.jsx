@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Button, Input, Alert } from '../components/ui'
+import { Mail, Lock, Zap, ArrowRight, CheckCircle } from 'lucide-react'
+
+const features = [
+  'AI-powered lead discovery across 50M+ contacts',
+  'Automated multi-step email campaigns',
+  'Real-time analytics & deliverability monitoring',
+  'Smart personalization with Gemini AI',
+]
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -15,156 +22,166 @@ const Login = () => {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
       await login(email, password)
       navigate('/leads')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to login')
+      setError(err.response?.data?.detail || 'Invalid email or password')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Login form */}
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:flex-none lg:px-20 xl:px-24 bg-white">
-        <div className="mx-auto w-full max-w-sm lg:w-96">
-          <div className="animate-fade-in">
-            {/* Logo and heading */}
-            <div className="flex items-center space-x-3 mb-8">
-              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-2xl">L</span>
-              </div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 bg-clip-text text-transparent">
-                Lead Gen AI
-              </h2>
-            </div>
-            
-            <h3 className="text-3xl font-bold text-gray-900 mb-2">
-              Welcome back
-            </h3>
-            <p className="text-gray-600 mb-8">
-              Sign in to continue to your account
-            </p>
-
-            {/* Error Alert */}
-            {error && (
-              <Alert variant="destructive" className="mb-6">
-                {error}
-              </Alert>
-            )}
-
-            {/* Login form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <Input
-                label="Email address"
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                  </svg>
-                }
-                placeholder="you@example.com"
-              />
-
-              <Input
-                label="Password"
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                }
-                placeholder="••••••••"
-              />
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 cursor-pointer">
-                    Remember me
-                  </label>
-                </div>
-                <a href="#" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
-                  Forgot password?
-                </a>
-              </div>
-
-              <Button
-                type="submit"
-                loading={loading}
-                fullWidth
-                size="lg"
-              >
-                Sign in
-              </Button>
-            </form>
-
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">New to Lead Gen AI?</span>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <Link to="/signup">
-                  <Button variant="secondary" fullWidth>
-                    Create an account
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen flex bg-gradient-dark bg-gradient-mesh">
+      {/* Ambient glow orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-brand-700/20 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 -right-40 w-80 h-80 bg-brand-600/15 rounded-full blur-3xl" />
+        <div className="absolute -bottom-20 left-1/3 w-72 h-72 bg-purple-700/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Right side - Hero section */}
-      <div className="hidden lg:flex lg:flex-1 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-700">
-          {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white opacity-5 rounded-full -mr-48 -mt-48"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-white opacity-5 rounded-full -ml-48 -mb-48"></div>
+      {/* Left — feature panel */}
+      <div className="hidden lg:flex flex-col justify-between w-[440px] shrink-0 px-12 py-14 border-r border-white/5">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-brand flex items-center justify-center shadow-glow-sm">
+            <Zap className="w-4.5 h-4.5 text-white" style={{width:'18px',height:'18px'}} />
+          </div>
+          <span className="text-white font-bold text-lg tracking-tight">Lead Gen AI</span>
         </div>
-        <div className="relative z-10 flex flex-col justify-center px-12 text-white">
-          <h2 className="text-4xl font-bold mb-4 animate-fade-in">
-            AI-Powered Lead Generation
-          </h2>
-          <p className="text-xl text-indigo-100 mb-8 animate-slide-in-right">
-            Transform your outreach with intelligent email campaigns and personalized messaging.
-          </p>
-          <div className="space-y-4">
-            {[
-              { icon: '🎯', text: 'Smart lead targeting and discovery' },
-              { icon: '✉️', text: 'AI-generated personalized emails' },
-              { icon: '📊', text: 'Real-time analytics and insights' },
-              { icon: '🚀', text: 'Automated campaign management' },
-            ].map((feature, index) => (
-              <div key={index} className="flex items-center space-x-3 text-indigo-100" style={{ animationDelay: `${index * 0.1}s` }}>
-                <span className="text-2xl">{feature.icon}</span>
-                <span className="text-lg">{feature.text}</span>
+
+        {/* Features */}
+        <div className="space-y-8">
+          <div>
+            <h2 className="text-3xl font-bold text-white leading-tight mb-3">
+              Grow your pipeline<br />with AI automation
+            </h2>
+            <p className="text-ink-400 text-sm leading-relaxed">
+              The smartest outreach platform for B2B teams — discover, engage, and convert leads at scale.
+            </p>
+          </div>
+          <ul className="space-y-3">
+            {features.map((f, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <CheckCircle className="w-4 h-4 text-brand-400 shrink-0 mt-0.5" />
+                <span className="text-ink-300 text-sm">{f}</span>
+              </li>
+            ))}
+          </ul>
+          {/* Social proof */}
+          <div className="flex gap-4">
+            {[['10x', 'Faster outreach'], ['50M+', 'Contacts indexed'], ['99.9%', 'Uptime SLA']].map(([val, lab]) => (
+              <div key={lab} className="flex-1 bg-white/5 border border-white/8 rounded-xl px-3 py-3 text-center" style={{borderColor:'rgba(255,255,255,0.08)'}}>
+                <p className="text-white font-bold text-lg">{val}</p>
+                <p className="text-ink-500 text-[11px] mt-0.5">{lab}</p>
               </div>
             ))}
+          </div>
+        </div>
+
+        <p className="text-ink-600 text-xs">© 2025 Lead Gen AI. All rights reserved.</p>
+      </div>
+
+      {/* Right — form panel */}
+      <div className="flex-1 flex items-center justify-center px-4 py-12 sm:px-8">
+        <div className="w-full max-w-sm animate-fade-up">
+          {/* Mobile logo */}
+          <div className="flex lg:hidden items-center gap-2.5 mb-10 justify-center">
+            <div className="w-9 h-9 rounded-xl bg-gradient-brand flex items-center justify-center shadow-glow-sm">
+              <Zap style={{width:'18px',height:'18px'}} className="text-white" />
+            </div>
+            <span className="text-white font-bold text-lg">Lead Gen AI</span>
+          </div>
+
+          {/* Card */}
+          <div className="glass-dark rounded-2xl px-8 py-8 shadow-card-lg border border-white/8" style={{borderColor:'rgba(255,255,255,0.08)'}}>
+            <div className="mb-7">
+              <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
+              <p className="text-ink-400 text-sm">Sign in to your account to continue</p>
+            </div>
+
+            {error && (
+              <div className="mb-5 flex items-start gap-2.5 bg-danger/10 border border-danger/25 text-red-300 rounded-lg px-3.5 py-3 text-sm animate-fade-up">
+                <span className="shrink-0 mt-0.5">⚠</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-medium text-ink-300 mb-1.5">
+                  Email address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-500 pointer-events-none" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    placeholder="you@company.com"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-ink-600
+                               focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-ink-300">Password</label>
+                  <a href="#" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+                    Forgot password?
+                  </a>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-500 pointer-events-none" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-ink-600
+                               focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60
+                           text-white font-semibold text-sm rounded-lg py-2.5 mt-2 transition-all duration-150 shadow-glow-sm
+                           hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0f1117]"
+              >
+                {loading ? (
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                ) : (
+                  <>
+                    Sign in
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-ink-500 text-sm">
+                Don't have an account?{' '}
+                <Link to="/signup" className="text-brand-400 hover:text-brand-300 font-medium transition-colors">
+                  Create one free
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -173,3 +190,4 @@ const Login = () => {
 }
 
 export default Login
+

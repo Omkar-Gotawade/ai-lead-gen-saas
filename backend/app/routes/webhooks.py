@@ -14,6 +14,7 @@ from app.models.lead import Lead
 from app.models.campaign_lead import CampaignLead, CampaignLeadStatus
 from app.models.sending_log import SendingLog
 from app.services.webhook_parser import parse_sendgrid_event, parse_gmail_event, extract_email_address
+from app.services.audit_logger import AuditLogger
 from app.config import settings
 
 router = APIRouter()
@@ -128,10 +129,22 @@ async def process_webhook_event(
         
         elif event_data.event_type == 'bounce' and lead:
             # Mark lead as bounced and do_not_contact
+            old_dnc = lead.do_not_contact
             lead.do_not_contact = True
             lead.bounce_reason = event_data.raw_data.get('reason', 'bounced')
             lead.bounced_at = event_data.timestamp or datetime.utcnow()
-            
+
+            # Audit log the DNC change
+            if not old_dnc:
+                AuditLogger.log_dnc_change(
+                    db=db,
+                    lead_id=lead.id,
+                    user_id=None,  # System action
+                    old_value=old_dnc,
+                    new_value=True,
+                    reason=f"Bounce webhook: {lead.bounce_reason}"
+                )
+
             # Stop any active campaigns
             campaign_leads = db.query(CampaignLead).filter(
                 CampaignLead.lead_id == lead.id,
@@ -140,18 +153,30 @@ async def process_webhook_event(
                     CampaignLeadStatus.IN_PROGRESS.value
                 ])
             ).all()
-            
+
             for cl in campaign_leads:
                 cl.stop_reason = 'bounced'
                 cl.status = CampaignLeadStatus.STOPPED.value
-                
+
             logger.info(f"Marked lead {lead.id} as bounced")
         
         elif event_data.event_type == 'spam' and lead:
             # Mark as do_not_contact
+            old_dnc = lead.do_not_contact
             lead.do_not_contact = True
             lead.bounce_reason = 'spam_complaint'
-            
+
+            # Audit log the DNC change
+            if not old_dnc:
+                AuditLogger.log_dnc_change(
+                    db=db,
+                    lead_id=lead.id,
+                    user_id=None,  # System action
+                    old_value=old_dnc,
+                    new_value=True,
+                    reason="Spam complaint webhook"
+                )
+
             # Stop campaigns
             campaign_leads = db.query(CampaignLead).filter(
                 CampaignLead.lead_id == lead.id,
@@ -160,7 +185,7 @@ async def process_webhook_event(
                     CampaignLeadStatus.IN_PROGRESS.value
                 ])
             ).all()
-            
+
             for cl in campaign_leads:
                 cl.stop_reason = 'spam_complaint'
                 cl.status = CampaignLeadStatus.STOPPED.value

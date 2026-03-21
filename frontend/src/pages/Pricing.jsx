@@ -71,16 +71,14 @@ export default function Pricing() {
   ]
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="p-6 space-y-8 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="text-center mb-12">
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <DollarSign className="w-8 h-8 text-blue-600" />
-          <h1 className="text-4xl font-bold text-slate-900">
-            Simple, Transparent Pricing
-          </h1>
+      <div className="text-center">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <DollarSign className="w-6 h-6 text-brand-600" />
+          <h1 className="page-title">Simple, Transparent Pricing</h1>
         </div>
-        <p className="text-xl text-slate-600 mb-6">
+        <p className="page-subtitle mb-6">
           Choose the plan that fits your needs. Upgrade or downgrade anytime.
         </p>
         
@@ -96,15 +94,15 @@ export default function Pricing() {
       </div>
 
       {/* Pricing Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {plans.map((plan, idx) => (
           <Card 
             key={idx}
-            className={`relative flex flex-col ${plan.popular ? 'border-2 border-blue-500 shadow-xl scale-105' : ''}`}
+            className={`relative flex flex-col ${plan.popular ? 'border-2 border-brand-600 shadow-card-lg' : ''}`}
           >
             {plan.badge && (
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <Badge variant={plan.popular ? "primary" : "secondary"} className="px-4 py-1">
+                <Badge variant={plan.popular ? "brand" : "default"} className="px-4 py-1">
                   {plan.badge}
                 </Badge>
               </div>
@@ -113,10 +111,10 @@ export default function Pricing() {
             <CardHeader className="text-center pt-8">
               <CardTitle className="text-2xl mb-2">{plan.name}</CardTitle>
               <div className="mb-4">
-                <span className="text-4xl font-bold text-slate-900">{plan.price}</span>
-                <span className="text-slate-600">{plan.period}</span>
+                <span className="text-4xl font-bold text-ink-900">{plan.price}</span>
+                <span className="text-ink-500">{plan.period}</span>
               </div>
-              <p className="text-sm text-slate-600">{plan.description}</p>
+              <p className="text-sm text-ink-500">{plan.description}</p>
             </CardHeader>
 
             <CardContent className="flex-1 flex flex-col">
@@ -126,9 +124,9 @@ export default function Pricing() {
                     {feature.included ? (
                       <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                     ) : (
-                      <X className="w-5 h-5 text-slate-300 flex-shrink-0 mt-0.5" />
+                      <X className="w-5 h-5 text-ink-300 flex-shrink-0 mt-0.5" />
                     )}
-                    <span className={feature.included ? 'text-slate-700' : 'text-slate-400'}>
+                    <span className={feature.included ? 'text-ink-700' : 'text-ink-300'}>
                       {feature.name}
                     </span>
                   </li>
@@ -144,7 +142,7 @@ export default function Pricing() {
               </Button>
               
               {!plan.current && (
-                <p className="text-xs text-center text-slate-500 mt-2">
+                <p className="text-xs text-center text-ink-400 mt-2">
                   Available after alpha phase
                 </p>
               )}
@@ -155,17 +153,17 @@ export default function Pricing() {
 
       {/* FAQ Section */}
       <div className="max-w-3xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">
+        <h2 className="text-xl font-bold text-ink-900 mb-6 text-center">
           Frequently Asked Questions
         </h2>
         
         <div className="space-y-4">
           <Card>
             <CardContent className="pt-6">
-              <h3 className="font-semibold text-slate-900 mb-2">
+              <h3 className="font-semibold text-ink-800 mb-2">
                 When will billing be activated?
               </h3>
-              <p className="text-slate-600 text-sm">
+              <p className="text-ink-500 text-sm">
                 Billing will be enabled when we move from alpha to beta. All alpha testers 
                 will receive at least 30 days notice and special early-adopter pricing.
               </p>
@@ -174,10 +172,10 @@ export default function Pricing() {
 
           <Card>
             <CardContent className="pt-6">
-              <h3 className="font-semibold text-slate-900 mb-2">
+              <h3 className="font-semibold text-ink-800 mb-2">
                 What happens if I exceed my email limit?
               </h3>
-              <p className="text-slate-600 text-sm">
+              <p className="text-ink-500 text-sm">
                 We'll send you a warning at 80% usage. If you exceed your limit, you can either 
                 upgrade your plan or wait until next month. We'll never auto-charge you.
               </p>
@@ -186,10 +184,10 @@ export default function Pricing() {
 
           <Card>
             <CardContent className="pt-6">
-              <h3 className="font-semibold text-slate-900 mb-2">
+              <h3 className="font-semibold text-ink-800 mb-2">
                 Can I cancel anytime?
               </h3>
-              <p className="text-slate-600 text-sm">
+              <p className="text-ink-500 text-sm">
                 Yes, absolutely. You can cancel at any time and you'll retain access until the 
                 end of your billing period. No long-term commitments required.
               </p>
@@ -198,10 +196,10 @@ export default function Pricing() {
 
           <Card>
             <CardContent className="pt-6">
-              <h3 className="font-semibold text-slate-900 mb-2">
+              <h3 className="font-semibold text-ink-800 mb-2">
                 Do you offer refunds?
               </h3>
-              <p className="text-slate-600 text-sm">
+              <p className="text-ink-500 text-sm">
                 Yes, we offer a 14-day money-back guarantee. If you're not satisfied, 
                 contact us within 14 days of purchase for a full refund.
               </p>
@@ -210,10 +208,10 @@ export default function Pricing() {
 
           <Card>
             <CardContent className="pt-6">
-              <h3 className="font-semibold text-slate-900 mb-2">
+              <h3 className="font-semibold text-ink-800 mb-2">
                 What's included in email support?
               </h3>
-              <p className="text-slate-600 text-sm">
+              <p className="text-ink-500 text-sm">
                 All plans include email support with response within 24 business hours. 
                 Growth and Enterprise plans get priority support with faster response times.
               </p>
@@ -224,12 +222,12 @@ export default function Pricing() {
 
       {/* Trust Section */}
       <div className="mt-12 text-center">
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-brand-50 border-brand-200">
           <CardContent className="pt-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
+            <h3 className="text-lg font-semibold text-ink-900 mb-2">
               🎁 Alpha Tester Benefit
             </h3>
-            <p className="text-slate-700">
+            <p className="text-ink-700">
               As an alpha tester, you'll receive <strong>lifetime 30% discount</strong> on any paid plan 
               when billing launches. Your feedback helps us build a better product!
             </p>

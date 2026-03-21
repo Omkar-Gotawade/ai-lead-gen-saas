@@ -281,26 +281,26 @@ const Settings = () => {
   const TabButton = ({ id, label, icon: Icon }) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+      className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
         activeTab === id
-          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          ? 'border-brand-600 text-brand-700'
+          : 'border-transparent text-ink-500 hover:text-ink-800 hover:border-ink-200'
       }`}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-3.5 w-3.5" />
       {label}
     </button>
   );
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="text-slate-500">Manage your account and application preferences.</p>
+        <h1 className="page-title">Settings</h1>
+        <p className="page-subtitle mt-0.5">Manage your account and application preferences</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-2 border-b border-slate-200 pb-2">
+      <div className="flex space-x-1 border-b border-ink-100 pb-0">
         <TabButton id="profile" label="Profile" icon={User} />
         <TabButton id="security" label="Security" icon={Shield} />
         <TabButton id="email" label="Email Provider" icon={Mail} />

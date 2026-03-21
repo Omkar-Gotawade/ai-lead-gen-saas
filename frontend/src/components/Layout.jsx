@@ -1,231 +1,211 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
-import { 
-  Users, 
-  Search, 
-  Mail, 
-  BarChart2, 
-  Webhook, 
-  ShieldCheck, 
-  Settings, 
-  LogOut, 
-  Menu, 
-  X 
+import {
+  Users,
+  Search,
+  Mail,
+  BarChart2,
+  Webhook,
+  ShieldCheck,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Zap,
+  CreditCard,
+  ChevronDown,
 } from 'lucide-react'
-import Button from './ui/Button'
 
-const Layout = () => {
+/* ─── Navigation items ─────────────────────────────────────── */
+const mainNav = [
+  { name: 'Leads',          to: '/leads',          icon: Users },
+  { name: 'Discover',       to: '/discover-leads', icon: Search },
+  { name: 'Campaigns',      to: '/campaigns',       icon: Mail },
+  { name: 'Analytics',      to: '/metrics',         icon: BarChart2 },
+  { name: 'Deliverability', to: '/deliverability',  icon: ShieldCheck },
+  { name: 'Webhooks',       to: '/webhooks',        icon: Webhook },
+]
+
+const bottomNav = [
+  { name: 'Settings', to: '/settings', icon: Settings },
+  { name: 'Pricing',  to: '/pricing',  icon: CreditCard },
+]
+
+/* ─── Sub-components ────────────────────────────────────────── */
+function NavItem({ item, isActive, onClick }) {
+  const Icon = item.icon
+  return (
+    <Link
+      to={item.to}
+      onClick={onClick}
+      className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 select-none ${
+        isActive
+          ? 'bg-white/10 text-white'
+          : 'text-sidebar-text hover:bg-sidebar-hover hover:text-white'
+      }`}
+    >
+      <Icon
+        className={`w-4 h-4 shrink-0 transition-colors duration-150 ${
+          isActive ? 'text-brand-400' : 'text-sidebar-muted group-hover:text-sidebar-text'
+        }`}
+      />
+      <span className="truncate">{item.name}</span>
+      {isActive && (
+        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
+      )}
+    </Link>
+  )
+}
+
+/* ─── Sidebar ───────────────────────────────────────────────── */
+function Sidebar({ onClose }) {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  const isActive = (path) =>
+    location.pathname === path || location.pathname.startsWith(path + '/')
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  const navigation = [
-    { name: 'Leads', to: '/leads', icon: Users },
-    { name: 'Discover', to: '/discover-leads', icon: Search },
-    { name: 'Campaigns', to: '/campaigns', icon: Mail },
-    { name: 'Analytics', to: '/metrics', icon: BarChart2 },
-    { name: 'Webhooks', to: '/webhooks', icon: Webhook },
-    { name: 'Deliverability', to: '/deliverability', icon: ShieldCheck },
-  ]
-
-  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/')
+  const initials = user?.email?.[0]?.toUpperCase() || 'U'
+  const email = user?.email || ''
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
-      {/* Enhanced Navigation */}
-      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50 backdrop-blur-sm bg-white/90">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              {/* Logo/Brand */}
-              <div className="flex-shrink-0 flex items-center">
-                <Link to="/" className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
-                    <span className="text-white font-bold text-lg">L</span>
-                  </div>
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 bg-clip-text text-transparent">
-                    Lead Gen AI
-                  </h1>
-                </Link>
-              </div>
-
-              {/* Desktop Navigation */}
-              <div className="hidden md:ml-8 md:flex md:space-x-1">
-                {navigation.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.to}
-                      className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                        isActive(item.to)
-                          ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 mr-2" />
-                      {item.name}
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Right side actions */}
-            <div className="flex items-center gap-2">
-              {/* User Menu - desktop only */}
-              <div className="hidden md:block relative">
-                <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm">
-                    {user?.email?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 max-w-[150px] truncate">
-                    {user?.email}
-                  </span>
-                </button>
-
-                {/* Dropdown Menu */}
-                {userMenuOpen && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-10" 
-                      onClick={() => setUserMenuOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                      <Link
-                        to="/pricing"
-                        className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setUserMenuOpen(false)}
-                      >
-                        <BarChart2 className="w-4 h-4" />
-                        Pricing
-                      </Link>
-                      <Link
-                        to="/settings"
-                        className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setUserMenuOpen(false)}
-                      >
-                        <Settings className="w-4 h-4" />
-                        Settings
-                      </Link>
-                      <hr className="my-1 border-gray-200" />
-                      <button
-                        onClick={() => {
-                          setUserMenuOpen(false)
-                          handleLogout()
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Mobile menu button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-              >
-                {mobileMenuOpen ? (
-                  <X className="w-6 h-6" />
-                ) : (
-                  <Menu className="w-6 h-6" />
-                )}
-              </button>
-            </div>
-          </div>
+    <aside className="flex flex-col w-60 h-full bg-sidebar-bg border-r border-sidebar-border shadow-sidebar sidebar-scroll overflow-y-auto">
+      {/* Logo */}
+      <div className="flex items-center gap-2.5 px-4 h-[60px] shrink-0 border-b border-sidebar-border">
+        <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center shadow-md shrink-0">
+          <Zap className="w-4 h-4 text-white" />
         </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white shadow-lg">
-            <div className="px-2 pt-2 pb-3 space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.to}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`block px-3 py-2 rounded-lg text-base font-medium transition-colors flex items-center ${
-                      isActive(item.to)
-                        ? 'bg-indigo-50 text-indigo-700'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {item.name}
-                  </Link>
-                )
-              })}
-              <Link
-                to="/settings"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`block px-3 py-2 rounded-lg text-base font-medium transition-colors flex items-center ${
-                  isActive('/settings')
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </Link>
-            </div>
-            <div className="border-t border-gray-200 px-4 py-3 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">{user?.email}</div>
-                <Button
-                  onClick={handleLogout}
-                  size="sm"
-                  variant="outline"
-                  icon={<LogOut className="w-4 h-4" />}
-                >
-                  Logout
-                </Button>
-              </div>
-            </div>
-          </div>
+        <span className="text-white font-bold text-[15px] tracking-tight">Lead Gen AI</span>
+        {/* Mobile close */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="ml-auto text-sidebar-muted hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
+      </div>
+
+      {/* Main nav */}
+      <nav className="flex-1 px-2 pt-4 pb-2 space-y-0.5">
+        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted">
+          Main
+        </p>
+        {mainNav.map((item) => (
+          <NavItem key={item.to} item={item} isActive={isActive(item.to)} onClick={onClose} />
+        ))}
+
+        <div className="divider-dark" />
+
+        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted">
+          Account
+        </p>
+        {bottomNav.map((item) => (
+          <NavItem key={item.to} item={item} isActive={isActive(item.to)} onClick={onClose} />
+        ))}
       </nav>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex-grow w-full">
-        <div className="animate-fade-in">
-          <Outlet />
-        </div>
-      </main>
+      {/* User footer */}
+      <div className="px-2 pb-3 shrink-0 border-t border-sidebar-border pt-2">
+        <div className="relative">
+          <button
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-sidebar-hover transition-colors duration-150"
+          >
+            <div className="w-7 h-7 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+              {initials}
+            </div>
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-[12px] font-medium text-sidebar-text truncate">{email}</p>
+            </div>
+            <ChevronDown className={`w-3.5 h-3.5 text-sidebar-muted shrink-0 transition-transform duration-150 ${userMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <div className="text-sm text-gray-600">
-              © 2025 Lead Gen AI. All rights reserved.
-            </div>
-            <div className="flex space-x-6 text-sm text-gray-600">
-              <a href="#" className="hover:text-indigo-600 transition-colors">Documentation</a>
-              <a href="#" className="hover:text-indigo-600 transition-colors">Support</a>
-              <a href="#" className="hover:text-indigo-600 transition-colors">Privacy</a>
-            </div>
-          </div>
+          {userMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#181b2b] border border-sidebar-border rounded-lg shadow-card-lg py-1 z-20 animate-fade-up">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-white/5 transition-colors"
+                >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  Sign out
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      </footer>
+      </div>
+    </aside>
+  )
+}
+
+/* ─── Layout ────────────────────────────────────────────────── */
+const Layout = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  return (
+    <div className="flex h-screen bg-canvas overflow-hidden">
+      {/* Desktop sidebar — always visible */}
+      <div className="hidden md:flex shrink-0">
+        <Sidebar />
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        >
+          <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-backdrop" />
+        </div>
+      )}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 md:hidden w-60 transition-transform duration-250 ease-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <Sidebar onClose={() => setSidebarOpen(false)} />
+      </div>
+
+      {/* Main area */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Mobile topbar */}
+        <header className="md:hidden flex items-center gap-3 h-14 px-4 bg-sidebar-bg border-b border-sidebar-border shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-sidebar-text hover:text-white transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-brand flex items-center justify-center">
+              <Zap className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="text-white font-semibold text-sm">Lead Gen AI</span>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="page-enter">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
 
 export default Layout
+

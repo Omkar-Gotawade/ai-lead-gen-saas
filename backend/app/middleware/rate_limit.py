@@ -24,8 +24,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """Process request and check rate limits."""
         
-        # Skip rate limiting for health checks and webhooks
-        if request.url.path in ["/", "/health", "/api/webhooks/sendgrid", "/api/webhooks/gmail"]:
+        # Skip rate limiting for health checks, webhooks, and CORS preflight requests
+        if request.url.path in ["/", "/health", "/api/webhooks/sendgrid", "/api/webhooks/gmail"] or request.method == "OPTIONS":
             return await call_next(request)
         
         # Get client IP

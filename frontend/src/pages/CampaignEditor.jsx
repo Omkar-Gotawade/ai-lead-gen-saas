@@ -187,22 +187,23 @@ function CampaignEditor() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Campaign Header */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <Button
           variant="ghost"
+          size="sm"
           onClick={() => navigate('/campaigns')}
-          icon={<ArrowLeft className="w-4 h-4" />}
-          className="pl-0 hover:bg-transparent hover:text-blue-600"
+          icon={<ArrowLeft className="w-3.5 h-3.5" />}
+          className="text-ink-500 hover:text-ink-800 pl-0"
         >
-          Back to Campaigns
+          Campaigns
         </Button>
 
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">{campaign.name}</h1>
-            <p className="text-slate-500 mt-1">{campaign.description}</p>
+            <h1 className="page-title">{campaign.name}</h1>
+            <p className="page-subtitle mt-0.5">{campaign.description}</p>
           </div>
           
           <div className="flex items-center gap-2">

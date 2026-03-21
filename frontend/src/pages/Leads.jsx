@@ -167,241 +167,206 @@ const Leads = () => {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
+      {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
-          <p className="text-slate-500">Manage and track your potential customers.</p>
+          <h1 className="page-title">Leads</h1>
+          <p className="page-subtitle mt-0.5">
+            {total > 0 ? `${total} contacts in your database` : 'Manage your contacts and prospects'}
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {selectedLeadIds.length > 0 && (
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setShowCampaignModal(true)}
-              className="text-green-600 border-green-200 hover:bg-green-50"
-              icon={<Users className="w-4 h-4" />}
+              icon={<Users className="w-3.5 h-3.5" />}
+              className="border-success/30 text-emerald-700 hover:bg-success/8"
             >
               Add {selectedLeadIds.length} to Campaign
             </Button>
           )}
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setShowCSVModal(true)}
-            icon={<Upload className="w-4 h-4" />}
+            icon={<Upload className="w-3.5 h-3.5" />}
           >
             Import CSV
           </Button>
           <Button
+            size="sm"
             onClick={() => setShowCreateModal(true)}
-            icon={<Plus className="w-4 h-4" />}
+            icon={<Plus className="w-3.5 h-3.5" />}
           >
             Add Lead
           </Button>
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Error */}
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {/* Main Content */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-12 flex justify-center">
-              <LoadingSpinner size="lg" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+      {/* Table card */}
+      <Card className="overflow-hidden">
+        {loading ? (
+          <LoadingSpinner size="md" text="Loading leads…" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedLeadIds.length === leads.length && leads.length > 0}
+                      onChange={handleSelectAll}
+                      className="w-3.5 h-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                  </th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Company</th>
+                  <th>Title</th>
+                  <th>Source</th>
+                  <th className="text-right pr-5">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-4 w-4">
-                      <div className="flex items-center">
+                    <td colSpan="7" className="py-16 text-center text-ink-400">
+                      <div className="flex flex-col items-center gap-3">
+                        <Users className="w-10 h-10 text-ink-200" />
+                        <div>
+                          <p className="font-medium text-ink-600">No leads yet</p>
+                          <p className="text-sm mt-0.5">Add a lead manually or import a CSV</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  leads.map((lead) => (
+                    <tr key={lead.id}>
+                      <td className="w-10 px-4">
                         <input
                           type="checkbox"
-                          checked={selectedLeadIds.length === leads.length && leads.length > 0}
-                          onChange={handleSelectAll}
-                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                          checked={selectedLeadIds.includes(lead.id)}
+                          onChange={() => handleSelectLead(lead.id)}
+                          className="w-3.5 h-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                         />
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 font-medium">Name</th>
-                    <th className="px-6 py-4 font-medium">Email</th>
-                    <th className="px-6 py-4 font-medium">Company</th>
-                    <th className="px-6 py-4 font-medium">Source</th>
-                    <th className="px-6 py-4 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {leads.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
-                        No leads found. Add a new lead or import a CSV to get started.
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-xs font-semibold shrink-0">
+                            {lead.full_name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <span className="font-medium text-ink-800">{lead.full_name}</span>
+                        </div>
+                      </td>
+                      <td className="text-ink-500">{lead.email}</td>
+                      <td className="text-ink-600">{lead.company || <span className="text-ink-300">—</span>}</td>
+                      <td className="text-ink-500 text-xs">{lead.title || <span className="text-ink-300">—</span>}</td>
+                      <td>
+                        <Badge variant="default" size="xs" className="capitalize">
+                          {lead.source || 'Manual'}
+                        </Badge>
+                      </td>
+                      <td className="text-right pr-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => { setSelectedLead(lead); setShowComposer(true); }}
+                            className="p-1.5 rounded-md text-ink-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            title="Compose Email"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleEnrichLead(lead.id)}
+                            disabled={enrichingLeads.has(lead.id)}
+                            className={`p-1.5 rounded-md transition-colors ${
+                              enrichingLeads.has(lead.id)
+                                ? 'text-brand-500 animate-pulse-soft'
+                                : 'text-ink-400 hover:text-purple-600 hover:bg-purple-50'
+                            }`}
+                            title="Enrich with AI"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { setSelectedLead(lead); setShowEditModal(true); }}
+                            className="p-1.5 rounded-md text-ink-400 hover:text-ink-700 hover:bg-ink-100 transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { setSelectedLead(lead); setShowDeleteModal(true); }}
+                            className="p-1.5 rounded-md text-ink-400 hover:text-danger hover:bg-danger/8 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    leads.map((lead) => (
-                      <tr key={lead.id} className="bg-white hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={selectedLeadIds.includes(lead.id)}
-                              onChange={() => handleSelectLead(lead.id)}
-                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 font-medium text-slate-900">
-                          {lead.full_name}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {lead.email}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {lead.company || <span className="text-slate-400">-</span>}
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant="secondary" className="capitalize">
-                            {lead.source || 'Manual'}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedLead(lead);
-                                setShowComposer(true);
-                              }}
-                              className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
-                              title="Compose Email"
-                            >
-                              <Mail className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEnrichLead(lead.id)}
-                              disabled={enrichingLeads.has(lead.id)}
-                              className={`p-1 transition-colors ${
-                                enrichingLeads.has(lead.id) 
-                                  ? 'text-blue-600 animate-pulse' 
-                                  : 'text-slate-400 hover:text-purple-600'
-                              }`}
-                              title="Enrich Lead"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedLead(lead);
-                                setShowEditModal(true);
-                              }}
-                              className="p-1 text-slate-400 hover:text-slate-900 transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedLead(lead);
-                                setShowDeleteModal(true);
-                              }}
-                              className="p-1 text-slate-400 hover:text-red-600 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {/* Pagination */}
       {!loading && total > 0 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-500">
-            Showing <span className="font-medium text-slate-900">{(page - 1) * pageSize + 1}</span> to{' '}
-            <span className="font-medium text-slate-900">
-              {Math.min(page * pageSize, total)}
-            </span>{' '}
-            of <span className="font-medium text-slate-900">{total}</span> results
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-              icon={<ChevronLeft className="w-4 h-4" />}
-            >
-              Previous
+        <div className="flex items-center justify-between text-sm">
+          <p className="text-ink-400">
+            Showing{' '}
+            <span className="font-semibold text-ink-700">{(page - 1) * pageSize + 1}</span>
+            {' – '}
+            <span className="font-semibold text-ink-700">{Math.min(page * pageSize, total)}</span>
+            {' of '}
+            <span className="font-semibold text-ink-700">{total}</span>
+          </p>
+          <div className="flex gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1} icon={<ChevronLeft className="w-3.5 h-3.5" />}>
+              Prev
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page + 1)}
-              disabled={page >= totalPages}
-            >
-              Next
-              <ChevronRight className="w-4 h-4 ml-2" />
+            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(total / pageSize)}>
+              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Modals */}
-      <CreateLeadModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateLead}
-      />
+      {/* Modals — unchanged logic */}
+      <CreateLeadModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onSubmit={handleCreateLead} />
       <EditLeadModal
         isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setSelectedLead(null);
-        }}
+        onClose={() => { setShowEditModal(false); setSelectedLead(null); }}
         onSubmit={handleEditLead}
         lead={selectedLead}
       />
       <DeleteLeadModal
         isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setSelectedLead(null);
-        }}
+        onClose={() => { setShowDeleteModal(false); setSelectedLead(null); }}
         onConfirm={handleDeleteLead}
         lead={selectedLead}
       />
-      <CSVUploadModal
-        isOpen={showCSVModal}
-        onClose={() => setShowCSVModal(false)}
-        onUpload={handleCSVUpload}
-      />
+      <CSVUploadModal isOpen={showCSVModal} onClose={() => setShowCSVModal(false)} onUpload={handleCSVUpload} />
       {showComposer && selectedLead && (
         <EmailComposer
           lead={selectedLead}
           emailProviderConfigured={emailProviderConfigured}
-          onClose={() => {
-            setShowComposer(false);
-            setSelectedLead(null);
-          }}
-          onSend={(emailData) => {
-            console.log('Email drafted:', emailData);
-            setShowComposer(false);
-            setSelectedLead(null);
-          }}
+          onClose={() => { setShowComposer(false); setSelectedLead(null); }}
+          onSend={() => { setShowComposer(false); setSelectedLead(null); }}
         />
       )}
       <AddToCampaignModal
@@ -415,3 +380,4 @@ const Leads = () => {
 };
 
 export default Leads;
+

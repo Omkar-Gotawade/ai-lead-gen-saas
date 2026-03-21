@@ -45,6 +45,7 @@ services:
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - BACKEND_CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","http://frontend:5173"]
+      - DEBUG=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,16 +95,19 @@ services:
       - ./backend:/app
     command: celery -A app.celery_app beat --loglevel=info
 
-  # React Frontend
+  # React Frontend (dev mode with HMR)
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: leadgen_frontend
     ports:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
 

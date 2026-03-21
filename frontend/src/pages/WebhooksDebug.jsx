@@ -114,17 +114,18 @@ export default function WebhooksDebug() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Email Events</h1>
-          <p className="text-slate-500">Monitor real-time email delivery events and webhooks.</p>
+          <h1 className="page-title">Email Events</h1>
+          <p className="page-subtitle mt-0.5">Monitor real-time delivery events and webhooks</p>
         </div>
         <Button 
-          variant="outline" 
+          variant="outline"
+          size="sm"
           onClick={fetchEvents} 
-          icon={<RefreshCw className="w-4 h-4" />}
-          isLoading={loading}
+          icon={<RefreshCw className="w-3.5 h-3.5" />}
+          loading={loading}
         >
           Refresh
         </Button>

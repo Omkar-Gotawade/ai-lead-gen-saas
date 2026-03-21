@@ -1,4 +1,5 @@
 """FastAPI application entry point."""
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
@@ -23,10 +24,13 @@ from app.database import engine, Base
 Base.metadata.create_all(bind=engine)
 
 # Create FastAPI application
+_debug = os.getenv("DEBUG", "false").lower() == "true"
 app = FastAPI(
     title="AI Lead Generation SaaS",
     description="Lead generation and outreach platform API",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if _debug else None,
+    redoc_url="/redoc" if _debug else None,
 )
 
 # Configure CORS

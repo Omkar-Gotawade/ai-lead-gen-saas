@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..models.lead import Lead
 from ..schemas.lead import LeadCreate, LeadUpdate, LeadListResponse
+from .audit_logger import AuditLogger
 
 
 class LeadService:
@@ -21,30 +22,35 @@ class LeadService:
         """
         self.db = db
     
-    def get_leads(self, page: int = 1, page_size: int = 50) -> LeadListResponse:
+    def get_leads(self, page: int = 1, page_size: int = 50, org_id: Optional[UUID] = None) -> LeadListResponse:
         """
-        Get paginated list of leads.
-        
+        Get paginated list of leads for an organization.
+
         Args:
             page: Page number (1-indexed)
             page_size: Number of leads per page
-            
+            org_id: Organization/User ID to filter leads
+
         Returns:
             LeadListResponse: Paginated lead data
         """
         # Calculate offset
         offset = (page - 1) * page_size
-        
+
+        # Build query with org_id filter
+        query = self.db.query(Lead)
+        if org_id:
+            query = query.filter(Lead.org_id == org_id)
+
         # Get total count
-        total = self.db.query(func.count(Lead.id)).scalar()
-        
+        total = query.count()
+
         # Get paginated leads
-        leads = self.db.query(Lead)\
-            .order_by(Lead.created_at.desc())\
+        leads = query.order_by(Lead.created_at.desc())\
             .offset(offset)\
             .limit(page_size)\
             .all()
-        
+
         return LeadListResponse(
             total=total,
             page=page,
@@ -52,17 +58,21 @@ class LeadService:
             leads=leads
         )
     
-    def get_lead(self, lead_id: UUID) -> Optional[Lead]:
+    def get_lead(self, lead_id: UUID, org_id: Optional[UUID] = None) -> Optional[Lead]:
         """
-        Get a single lead by ID.
-        
+        Get a single lead by ID, optionally filtered by organization.
+
         Args:
             lead_id: Lead UUID
-            
+            org_id: Organization/User ID to restrict access
+
         Returns:
             Optional[Lead]: Lead object or None
         """
-        return self.db.query(Lead).filter(Lead.id == lead_id).first()
+        query = self.db.query(Lead).filter(Lead.id == lead_id)
+        if org_id:
+            query = query.filter(Lead.org_id == org_id)
+        return query.first()
     
     def create_lead(self, lead_data: LeadCreate) -> Lead:
         """
@@ -94,33 +104,56 @@ class LeadService:
         self.db.refresh(lead)
         return lead
     
-    def update_lead(self, lead_id: UUID, lead_data: LeadUpdate) -> Optional[Lead]:
+    def update_lead(self, lead_id: UUID, lead_data: LeadUpdate, user_id: Optional[UUID] = None) -> Optional[Lead]:
         """
         Update a lead.
-        
+
         Args:
             lead_id: Lead UUID
             lead_data: Lead update data
-            
+            user_id: User ID for audit logging
+
         Returns:
             Optional[Lead]: Updated lead or None if not found
         """
         lead = self.get_lead(lead_id)
         if not lead:
             return None
-        
+
+        # Track DNC changes for audit logging
+        dnc_changed = False
+        old_dnc_value = lead.do_not_contact
+
         # Update fields if provided
         update_data = lead_data.model_dump(exclude_unset=True)
-        
+
+        # Check if DNC status is being changed
+        if 'do_not_contact' in update_data:
+            new_dnc_value = update_data['do_not_contact']
+            if old_dnc_value != new_dnc_value:
+                dnc_changed = True
+
         for field, value in update_data.items():
             setattr(lead, field, value)
-        
+
         # Update full_name if first_name or last_name changed
         if 'first_name' in update_data or 'last_name' in update_data:
             lead.full_name = f"{lead.first_name} {lead.last_name}"
-        
+
         self.db.commit()
         self.db.refresh(lead)
+
+        # Audit log DNC changes
+        if dnc_changed:
+            AuditLogger.log_dnc_change(
+                db=self.db,
+                lead_id=lead_id,
+                user_id=user_id,
+                old_value=old_dnc_value,
+                new_value=lead.do_not_contact,
+                reason="Manual update via API"
+            )
+
         return lead
     
     def delete_lead(self, lead_id: UUID) -> bool:

@@ -11,6 +11,7 @@ from app.models.sequence_step import SequenceStep
 from app.models.lead import Lead
 from app.workers.email_worker import send_email_task
 from app.services.ai_email_service import generate_email
+from app.services.audit_logger import AuditLogger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,14 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             campaign_lead.status = CampaignLeadStatus.STOPPED.value
             campaign_lead.stop_reason = 'do_not_contact'
             db.commit()
+
+            # Audit log the blocked send attempt
+            AuditLogger.log_dnc_send_attempt(
+                db=db,
+                lead_id=lead.id,
+                campaign_id=campaign.id,
+                blocked=True
+            )
             return
         
         # Get user for sender name

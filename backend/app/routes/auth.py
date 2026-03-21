@@ -67,7 +67,11 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     
     # Create access token
     access_token = auth_service.create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": str(user.id)
+    }
 
 
 @router.get("/me", response_model=UserResponse)

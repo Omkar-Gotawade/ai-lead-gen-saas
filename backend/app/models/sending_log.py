@@ -22,12 +22,15 @@ class SendingLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     lead_id = Column(UUID(as_uuid=True), nullable=True, index=True)
-    
+
+    # Deduplication tracking
+    message_id = Column(String, nullable=True, index=True, unique=True)
+
     provider_type = Column(String, nullable=False)
     to_email = Column(String, nullable=False)
     subject = Column(String, nullable=False)
-    
+
     status = Column(SQLEnum(SendStatus), default=SendStatus.QUEUED, nullable=False)
     error_message = Column(String, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
