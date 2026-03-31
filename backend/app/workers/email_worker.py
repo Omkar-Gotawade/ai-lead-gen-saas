@@ -1,6 +1,7 @@
 """Celery tasks for email sending."""
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 from app.celery_app import celery_app
 from app.database import SessionLocal
 from app.models.email_provider import EmailProviderSettings
@@ -13,7 +14,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="send_email_task", bind=True, max_retries=3)
+@celery_app.task(
+    name="send_email_task",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 5},
+)
 def send_email_task(
     self,
     user_id: str,
@@ -92,6 +99,20 @@ def send_email_task(
         if not provider:
             raise Exception("Email provider not configured")
 
+        # Load lead and enforce DNC before any send attempt
+        lead = None
+        if lead_id:
+            lead = db.query(Lead).filter(Lead.id == UUID(lead_id)).first()
+            if lead and (lead.do_not_contact or lead.is_do_not_contact):
+                logger.warning(f"Blocked send to DNC lead {lead.id}")
+                if existing_db_log:
+                    existing_db_log.status = SendStatus.FAILED
+                    existing_db_log.error_message = "Blocked by do-not-contact policy"
+                    existing_db_log.failed_at = datetime.utcnow()
+                    existing_db_log.retry_count = self.request.retries
+                    db.commit()
+                return {"status": "blocked_dnc", "message_id": message_id}
+
         # Create sending log if doesn't exist
         if not existing_db_log:
             log = SendingLog(
@@ -101,7 +122,8 @@ def send_email_task(
                 to_email=to_email,
                 subject=subject,
                 message_id=message_id,
-                status=SendStatus.QUEUED
+                status=SendStatus.QUEUED,
+                retry_count=self.request.retries,
             )
             db.add(log)
             db.commit()
@@ -109,6 +131,7 @@ def send_email_task(
         else:
             log = existing_db_log
             log.status = SendStatus.QUEUED
+            log.retry_count = self.request.retries
             db.commit()
 
         try:
@@ -122,6 +145,7 @@ def send_email_task(
 
             # Update log as sent
             log.status = SendStatus.SENT
+            log.sent_at = datetime.utcnow()
             db.commit()
 
             logger.info(f"Email sent successfully: message_id={message_id}, to={to_email}")
@@ -132,17 +156,29 @@ def send_email_task(
             # Update log as failed
             log.status = SendStatus.FAILED
             log.error_message = str(e)
+            log.retry_count = self.request.retries
+            log.failed_at = datetime.utcnow()
             db.commit()
 
             # Clear Redis marker to allow retry
             RedisService.clear_sent_message(message_id)
 
             logger.error(f"Email send failed: message_id={message_id}, error={str(e)}")
-
-            # Retry the task
-            raise self.retry(exc=e, countdown=60 * (self.request.retries + 1))
+            raise
 
     except Exception as e:
+        # Dead-letter style terminal marking when retries are exhausted
+        if self.request.retries >= self.max_retries:
+            try:
+                log = db.query(SendingLog).filter(SendingLog.message_id == message_id).first()
+                if log:
+                    log.status = SendStatus.FAILED
+                    log.error_message = f"Retries exhausted: {str(e)}"
+                    log.retry_count = self.request.retries
+                    log.failed_at = datetime.utcnow()
+                    db.commit()
+            except Exception:
+                db.rollback()
         logger.error(f"Email task error: {str(e)}")
         raise
     finally:

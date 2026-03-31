@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '009_message_id'
-down_revision = '008_v1_discovery'  # Adjust based on your latest migration
+down_revision = '011_add_user_full_name'
 branch_labels = None
 depends_on = None
 

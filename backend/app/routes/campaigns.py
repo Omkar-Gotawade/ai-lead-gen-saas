@@ -18,6 +18,7 @@ from app.schemas.campaign import (
     CampaignWithSteps
 )
 from app.services.auth import get_current_user
+from app.services.rate_limiter import enforce_rate_limit
 
 router = APIRouter()
 
@@ -216,6 +217,8 @@ async def enqueue_leads_to_campaign(
     Returns:
         Success message with count of enqueued leads
     """
+    enforce_rate_limit("campaign_send", str(current_user.id))
+
     # Verify campaign exists and belongs to user
     campaign = db.query(Campaign).filter(
         Campaign.id == campaign_id,

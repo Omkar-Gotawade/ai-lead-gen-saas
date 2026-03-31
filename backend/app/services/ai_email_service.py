@@ -1,5 +1,5 @@
 """AI email generation service using Google Gemini."""
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 import google.generativeai as genai
 from app.config import settings
 from app.models.lead import Lead
@@ -44,6 +44,65 @@ BANNED_PHRASES = [
 ]
 
 
+def _extract_lead_research_signals(lead: Lead) -> List[str]:
+    """Collect concrete research signals from lead fields and enrichment JSON."""
+    signals: List[str] = []
+
+    # Core LinkedIn/persona signals
+    if lead.linkedin_url:
+        signals.append(f"LinkedIn URL: {lead.linkedin_url}")
+    if lead.linkedin_headline:
+        signals.append(f"LinkedIn headline: {lead.linkedin_headline}")
+    if lead.job_title:
+        signals.append(f"Job title: {lead.job_title}")
+    if lead.seniority:
+        signals.append(f"Seniority: {lead.seniority}")
+
+    # Existing enriched profile/company details
+    if lead.company_size:
+        signals.append(f"Company size: {lead.company_size}")
+
+    enriched = lead.enriched_data if isinstance(lead.enriched_data, dict) else None
+    if enriched:
+        preferred_keys = [
+            "company_domain",
+            "company_summary",
+            "industry",
+            "pain_points",
+            "key_insights",
+            "funding",
+            "hiring",
+            "tech_stack",
+            "tools",
+            "recent_news",
+            "signals",
+        ]
+
+        for key in preferred_keys:
+            value = enriched.get(key)
+            if not value:
+                continue
+            if isinstance(value, list):
+                cleaned = [str(v).strip() for v in value if str(v).strip()]
+                if cleaned:
+                    signals.append(f"{key}: {', '.join(cleaned[:5])}")
+            elif isinstance(value, (str, int, float)):
+                text = str(value).strip()
+                if text:
+                    signals.append(f"{key}: {text}")
+
+    # Deduplicate while preserving order
+    deduped: List[str] = []
+    seen = set()
+    for signal in signals:
+        norm = signal.lower()
+        if norm not in seen:
+            seen.add(norm)
+            deduped.append(signal)
+
+    return deduped
+
+
 def _format_research_notes_prompt(notes: str) -> str:
     """
     Format research notes for the LLM to extract key points.
@@ -58,7 +117,7 @@ def _format_research_notes_prompt(notes: str) -> str:
         return ""
     
     return f"""
-� CRITICAL RESEARCH INSIGHTS (MUST USE IN EMAIL):
+[CRITICAL RESEARCH INSIGHTS - MUST USE IN EMAIL]
 {notes}
 
 ⚠️ REQUIREMENT: You MUST reference at least ONE specific detail from these notes in your opening sentence.
@@ -106,14 +165,16 @@ def _check_email_quality(email: GeneratedEmail, lead: Lead) -> List[str]:
     if lead.company and lead.company.lower() not in body_lower:
         issues.append(f"Company name '{lead.company}' not mentioned in email")
     
-    # CRITICAL: If research notes exist, check if email references specific details
-    if lead.research_notes:
+    # CRITICAL: If any research context exists, ensure email references specific details
+    research_signals = _extract_lead_research_signals(lead)
+    research_corpus = "\n".join([lead.research_notes or ""] + research_signals).strip()
+    if research_corpus:
         # Extract potential specific details (numbers, dollar signs, tool names, etc.)
-        research_lower = lead.research_notes.lower()
+        research_lower = research_corpus.lower()
         has_specific_reference = False
         
         # Check for numbers from research in email
-        numbers_in_research = re.findall(r'\b\d+\b', lead.research_notes)
+        numbers_in_research = re.findall(r'\b\d+\b', research_corpus)
         for num in numbers_in_research:
             if num in email.body:
                 has_specific_reference = True
@@ -127,7 +188,7 @@ def _check_email_quality(email: GeneratedEmail, lead: Lead) -> List[str]:
                 break
         
         if not has_specific_reference:
-            issues.append("Research notes provided but email doesn't reference specific details (numbers, tools, events)")
+            issues.append("Research context available but email doesn't reference specific details (numbers, tools, events)")
     
     # Check for clear CTA (question mark or action words)
     has_question = '?' in email.body
@@ -217,8 +278,26 @@ async def generate_email(
     
     if lead.location:
         lead_context_parts.append(f"- Location: {lead.location}")
+
+    if lead.linkedin_url:
+        lead_context_parts.append(f"- LinkedIn URL: {lead.linkedin_url}")
+
+    if lead.job_title:
+        lead_context_parts.append(f"- LinkedIn Job Title: {lead.job_title}")
+
+    if lead.seniority:
+        lead_context_parts.append(f"- Seniority: {lead.seniority}")
+
+    if lead.linkedin_headline:
+        lead_context_parts.append(f"- LinkedIn Headline: {lead.linkedin_headline}")
     
     lead_context = "Lead Information:\n" + "\n".join(lead_context_parts)
+
+    # Add enrichment signals (LinkedIn/company intelligence) if present
+    research_signals = _extract_lead_research_signals(lead)
+    enrichment_section = ""
+    if research_signals:
+        enrichment_section = "Research Signals (LinkedIn + Enrichment):\n" + "\n".join(f"- {s}" for s in research_signals)
     
     # Add research notes if available (MOST IMPORTANT)
     research_section = ""
@@ -231,6 +310,8 @@ async def generate_email(
 {lead_context}
 
 {research_section}
+
+{enrichment_section}
 
 Email Context:
 - Tone: {tone}
@@ -366,7 +447,7 @@ CONVERSATIONAL (use):
 "with TCS operating in 55 countries"
 
 === YOUR TASK ===
-Write a cold email following ALL rules above. Use research notes if provided. Keep total length 80-120 words.
+Write a cold email following ALL rules above. Use research notes/signals if provided. Keep total length 80-120 words.
 
 Format your response EXACTLY as:
 SUBJECT: [short, specific subject line - 3-6 words]

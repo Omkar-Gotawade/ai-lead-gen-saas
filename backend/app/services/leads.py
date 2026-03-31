@@ -8,6 +8,8 @@ from sqlalchemy import func
 from ..models.lead import Lead
 from ..schemas.lead import LeadCreate, LeadUpdate, LeadListResponse
 from .audit_logger import AuditLogger
+from ..config import settings
+from .validation import normalize_email, sanitize_text
 
 
 class LeadService:
@@ -74,7 +76,7 @@ class LeadService:
             query = query.filter(Lead.org_id == org_id)
         return query.first()
     
-    def create_lead(self, lead_data: LeadCreate) -> Lead:
+    def create_lead(self, lead_data: LeadCreate, org_id: Optional[UUID] = None) -> Lead:
         """
         Create a new lead.
         
@@ -84,19 +86,51 @@ class LeadService:
         Returns:
             Lead: Created lead object
         """
+        email = normalize_email(str(lead_data.email))
+        first_name = sanitize_text(lead_data.first_name, max_len=100)
+        last_name = sanitize_text(lead_data.last_name, max_len=100)
+        company = sanitize_text(lead_data.company, max_len=255)
+
+        if not first_name or not last_name or not email:
+            raise ValueError("first_name, last_name, and email are required")
+
+        # Duplicate protection per org/user
+        existing = self.db.query(Lead).filter(
+            Lead.org_id == org_id,
+            func.lower(Lead.email) == email
+        ).first()
+
+        if existing:
+            if settings.LEAD_DUPLICATE_STRATEGY == "update":
+                existing.first_name = first_name
+                existing.last_name = last_name
+                existing.full_name = f"{first_name} {last_name}"
+                existing.company = company
+                self.db.commit()
+                self.db.refresh(existing)
+                return existing
+            raise ValueError("Duplicate lead for this user/org")
+
         # Generate full name
-        full_name = f"{lead_data.first_name} {lead_data.last_name}"
+        full_name = f"{first_name} {last_name}"
         
         lead = Lead(
-            first_name=lead_data.first_name,
-            last_name=lead_data.last_name,
+            org_id=org_id,
+            first_name=first_name,
+            last_name=last_name,
             full_name=full_name,
-            email=lead_data.email,
-            company=lead_data.company,
+            email=email,
+            company=company,
             title=getattr(lead_data, 'title', None),
             industry=getattr(lead_data, 'industry', None),
             phone=getattr(lead_data, 'phone', None),
-            source=lead_data.source
+            source=lead_data.source,
+            linkedin_url=getattr(lead_data, 'linkedin_url', None),
+            job_title=getattr(lead_data, 'job_title', None),
+            seniority=getattr(lead_data, 'seniority', None),
+            company_size=getattr(lead_data, 'company_size', None),
+            location=getattr(lead_data, 'location', None),
+            research_notes=getattr(lead_data, 'research_notes', None),
         )
         
         self.db.add(lead)
@@ -126,6 +160,14 @@ class LeadService:
 
         # Update fields if provided
         update_data = lead_data.model_dump(exclude_unset=True)
+
+        if 'email' in update_data and update_data['email']:
+            update_data['email'] = normalize_email(str(update_data['email']))
+
+        for field in ['first_name', 'last_name', 'company', 'title', 'industry', 'location', 'research_notes', 'source', 'linkedin_url', 'job_title', 'seniority', 'company_size', 'dnc_reason']:
+            if field in update_data:
+                max_len = 5000 if field == 'research_notes' else 255
+                update_data[field] = sanitize_text(update_data[field], max_len=max_len)
 
         # Check if DNC status is being changed
         if 'do_not_contact' in update_data:
@@ -174,7 +216,7 @@ class LeadService:
         self.db.commit()
         return True
     
-    def create_leads_from_csv(self, csv_content: bytes) -> int:
+    def create_leads_from_csv(self, csv_content: bytes, org_id: Optional[UUID] = None) -> dict:
         """
         Create multiple leads from CSV file.
         
@@ -202,18 +244,47 @@ class LeadService:
             raise ValueError(f"CSV must contain columns: {', '.join(required_columns)}")
         
         created_count = 0
+        skipped_count = 0
+        duplicate_count = 0
         
         for row in reader:
             try:
+                first_name = sanitize_text(row['first_name'], max_len=100)
+                last_name = sanitize_text(row['last_name'], max_len=100)
+                email = normalize_email(row['email'])
+                company = sanitize_text(row.get('company', ''), max_len=255)
+
+                if not first_name or not last_name or not email:
+                    skipped_count += 1
+                    continue
+
+                existing = None
+                if org_id:
+                    existing = self.db.query(Lead).filter(
+                        Lead.org_id == org_id,
+                        func.lower(Lead.email) == email
+                    ).first()
+
+                if existing:
+                    duplicate_count += 1
+                    if settings.LEAD_DUPLICATE_STRATEGY == 'update':
+                        existing.first_name = first_name
+                        existing.last_name = last_name
+                        existing.full_name = f"{first_name} {last_name}"
+                        existing.company = company
+                        created_count += 1
+                    continue
+
                 # Create lead from CSV row
-                full_name = f"{row['first_name']} {row['last_name']}"
+                full_name = f"{first_name} {last_name}"
                 
                 lead = Lead(
-                    first_name=row['first_name'].strip(),
-                    last_name=row['last_name'].strip(),
+                    first_name=first_name,
+                    last_name=last_name,
                     full_name=full_name,
-                    email=row['email'].strip(),
-                    company=row.get('company', '').strip() or None,
+                    email=email,
+                    company=company or None,
+                    org_id=org_id,
                     source='csv_upload'
                 )
                 
@@ -222,7 +293,12 @@ class LeadService:
             except Exception as e:
                 # Skip invalid rows
                 print(f"Skipping row due to error: {e}")
+                skipped_count += 1
                 continue
         
         self.db.commit()
-        return created_count
+        return {
+            "added": created_count,
+            "skipped": skipped_count,
+            "duplicates": duplicate_count,
+        }

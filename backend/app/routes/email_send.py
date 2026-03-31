@@ -9,6 +9,7 @@ from app.models.lead import Lead
 from app.models.sending_log import SendingLog
 from app.schemas.email import EmailSendRequest, EmailSendResponse, EmailTestRequest
 from app.services.auth import get_current_user
+from app.services.rate_limiter import enforce_rate_limit
 from app.workers.email_worker import send_email_task
 
 router = APIRouter()
@@ -31,10 +32,12 @@ async def send_email_endpoint(
     Returns:
         Response indicating email was queued
     """
+    enforce_rate_limit("campaign_send", str(current_user.id))
+
     # Fetch the lead
     lead = db.query(Lead).filter(
         Lead.id == request.lead_id,
-        Lead.user_id == current_user.id
+        Lead.org_id == current_user.id
     ).first()
     
     if not lead:
@@ -72,6 +75,8 @@ async def send_test_email_endpoint(
     Returns:
         Response indicating email was queued
     """
+    enforce_rate_limit("campaign_send", str(current_user.id))
+
     # Enqueue test email
     send_email_task.delay(
         user_id=str(current_user.id),

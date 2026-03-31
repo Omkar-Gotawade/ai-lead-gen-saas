@@ -7,6 +7,7 @@ from ..database import get_db
 from ..schemas.lead import LeadCreate, LeadUpdate, LeadResponse, LeadListResponse
 from ..services.leads import LeadService
 from ..services.auth import get_current_user
+from ..services.validation import normalize_email
 from ..models.user import User
 from ..workers.tasks import enrich_lead_task
 
@@ -55,12 +56,15 @@ async def create_lead(
         LeadResponse: Created lead information
     """
     lead_service = LeadService(db)
-    lead = lead_service.create_lead(lead_data)
-    # Set the org_id to the current user's ID
-    lead.org_id = current_user.id
-    db.commit()
-    db.refresh(lead)
-    return lead
+    lead_data.email = normalize_email(str(lead_data.email))
+    try:
+        lead = lead_service.create_lead(lead_data, org_id=current_user.id)
+        return lead
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)
@@ -196,11 +200,13 @@ async def upload_csv(
     
     try:
         contents = await file.read()
-        created_count = lead_service.create_leads_from_csv(contents)
+        summary = lead_service.create_leads_from_csv(contents, org_id=current_user.id)
         
         return {
             "message": "CSV uploaded successfully",
-            "leads_created": created_count
+            "added": summary["added"],
+            "skipped": summary["skipped"],
+            "duplicates": summary["duplicates"]
         }
     except Exception as e:
         raise HTTPException(

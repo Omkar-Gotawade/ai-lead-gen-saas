@@ -10,6 +10,7 @@ from ..config import settings
 from ..database import get_db
 from ..models.user import User
 from ..schemas.user import UserCreate, TokenData
+from .validation import normalize_email, sanitize_text
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -65,7 +66,8 @@ class AuthService:
         Returns:
             Optional[User]: User object or None
         """
-        return self.db.query(User).filter(User.email == email).first()
+        normalized = normalize_email(email)
+        return self.db.query(User).filter(User.email == normalized).first()
     
     def create_user(self, user_data: UserCreate) -> User:
         """
@@ -79,8 +81,9 @@ class AuthService:
         """
         hashed_password = self.get_password_hash(user_data.password)
         user = User(
-            email=user_data.email,
-            hashed_password=hashed_password
+            email=normalize_email(str(user_data.email)),
+            hashed_password=hashed_password,
+            full_name=sanitize_text(user_data.full_name, max_len=255)
         )
         self.db.add(user)
         self.db.commit()
@@ -122,9 +125,20 @@ class AuthService:
         else:
             expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         
-        to_encode.update({"exp": expire})
+        to_encode.update({"exp": expire, "type": "access"})
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
+
+    def create_refresh_token(self, data: dict) -> str:
+        """Create a long-lived refresh token."""
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        to_encode.update({"exp": expire, "type": "refresh"})
+        return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+    def decode_token(self, token: str) -> dict:
+        """Decode and validate JWT."""
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
 
 async def get_current_user(
@@ -152,6 +166,8 @@ async def get_current_user(
     
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "access":
+            raise credentials_exception
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception

@@ -1,5 +1,5 @@
 """Lead model for storing lead information."""
-from sqlalchemy import Column, String, DateTime, Text, Boolean
+from sqlalchemy import Column, String, DateTime, Text, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 import uuid
@@ -10,6 +10,9 @@ class Lead(Base):
     """Lead model for storing lead/prospect information."""
     
     __tablename__ = "leads"
+    __table_args__ = (
+        UniqueConstraint('org_id', 'email', name='uq_leads_org_email'),
+    )
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # For future multi-tenant support
@@ -39,6 +42,11 @@ class Lead(Base):
     do_not_contact = Column(Boolean, default=False, nullable=False, index=True)
     bounce_reason = Column(String(255), nullable=True)
     bounced_at = Column(DateTime, nullable=True)
+
+    # Production safety flags (canonical DNC fields)
+    is_do_not_contact = Column(Boolean, default=False, nullable=False, index=True)
+    dnc_reason = Column(String(255), nullable=True)
+    dnc_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     

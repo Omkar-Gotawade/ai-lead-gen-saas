@@ -16,7 +16,7 @@ Replace OpenAI credentials with Gemini in `docker-compose.yml`:
 environment:
   - GEMINI_API_KEY=your-gemini-api-key-here
   - GEMINI_MODEL=gemini-pro
-  - ENCRYPTION_KEY=qWU_C0llov5ZH0vuDMJ3YMpzjZAdkVBN-cLcseb0J5M=
+  - ENCRYPTION_KEY=your-32-byte-base64-encryption-key
 ```
 
 ### Getting a Gemini API Key

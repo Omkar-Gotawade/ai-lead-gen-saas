@@ -38,6 +38,8 @@ class LeadUpdate(BaseModel):
     seniority: Optional[str] = Field(None, max_length=50)
     company_size: Optional[str] = Field(None, max_length=50)
     do_not_contact: Optional[bool] = None
+    is_do_not_contact: Optional[bool] = None
+    dnc_reason: Optional[str] = Field(None, max_length=255)
 
 
 class LeadResponse(BaseModel):
@@ -61,6 +63,9 @@ class LeadResponse(BaseModel):
     company_size: Optional[str] = None
     linkedin_headline: Optional[str] = None
     do_not_contact: bool
+    is_do_not_contact: bool
+    dnc_reason: Optional[str] = None
+    dnc_at: Optional[datetime] = None
     bounce_reason: Optional[str] = None
     bounced_at: Optional[datetime] = None
     created_at: datetime

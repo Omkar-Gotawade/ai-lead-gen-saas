@@ -1,5 +1,5 @@
 """Sending log model for tracking email sends."""
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Integer, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -32,5 +32,8 @@ class SendingLog(Base):
 
     status = Column(SQLEnum(SendStatus), default=SendStatus.QUEUED, nullable=False)
     error_message = Column(String, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    failed_at = Column(DateTime, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

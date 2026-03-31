@@ -12,6 +12,7 @@ from app.models.lead import Lead
 from app.workers.email_worker import send_email_task
 from app.services.ai_email_service import generate_email
 from app.services.audit_logger import AuditLogger
+from app.services.campaign_guard import enforce_campaign_send_limit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             return
         
         # Week 3: Check if lead is marked do_not_contact
-        if lead.do_not_contact:
+        if lead.do_not_contact or lead.is_do_not_contact:
             print(f"Lead {lead.id} is marked do_not_contact, stopping campaign")
             campaign_lead.status = CampaignLeadStatus.STOPPED.value
             campaign_lead.stop_reason = 'do_not_contact'
@@ -177,6 +178,19 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
                 campaign_id=campaign.id,
                 blocked=True
             )
+            return
+
+        # Enforce daily warmup send cap and pause when limit reached
+        enforce_campaign_send_limit(
+            db=db,
+            campaign_id=campaign.id,
+            campaign_lead_id=campaign_lead.id,
+            user_id=campaign.user_id,
+        )
+
+        db.refresh(campaign_lead)
+        if campaign_lead.status == CampaignLeadStatus.STOPPED.value and campaign_lead.stop_reason == 'Daily limit reached':
+            logger.warning(f"Campaign lead {campaign_lead.id} paused due to daily limit")
             return
         
         # Get user for sender name

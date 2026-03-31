@@ -110,10 +110,10 @@ REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=your-secret-key-change-in-production
 
 # Gemini AI
-GEMINI_API_KEY=AIzaSyANwxEGKbdzOYsDCW-aPyLCnsO413ZHXSw
+GEMINI_API_KEY=your-gemini-api-key
 
 # Encryption
-ENCRYPTION_KEY=qWU_C0llov5ZH0vuDMJ3YMpzjZAdkVBN-cLcseb0J5M=
+ENCRYPTION_KEY=your-32-byte-base64-encryption-key
 
 # Webhook Security (Week 3)
 SENDGRID_SIGNING_KEY=your-sendgrid-verification-key

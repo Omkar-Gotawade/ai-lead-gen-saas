@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     """Schema for user registration."""
     email: EmailStr
     password: str
+    full_name: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -31,6 +32,7 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     """Schema for JWT token response."""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user_id: str  # Add user_id for convenience
 
@@ -38,6 +40,11 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     """Schema for token payload data."""
     email: Optional[str] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for refresh token request."""
+    refresh_token: str
 
 
 class UserProfileUpdate(BaseModel):

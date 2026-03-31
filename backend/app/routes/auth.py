@@ -2,8 +2,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..schemas.user import UserCreate, UserLogin, UserResponse, Token, UserProfileUpdate, PasswordChange
+from ..schemas.user import UserCreate, UserLogin, UserResponse, Token, UserProfileUpdate, PasswordChange, RefreshTokenRequest
 from ..services.auth import AuthService, get_current_user
+from ..services.rate_limiter import enforce_rate_limit
+from ..services.validation import normalize_email
 from ..models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -55,6 +57,7 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
         HTTPException: If credentials are invalid
     """
     auth_service = AuthService(db)
+    enforce_rate_limit("login", normalize_email(str(credentials.email)) or "unknown")
     
     # Authenticate user
     user = auth_service.authenticate_user(credentials.email, credentials.password)
@@ -67,10 +70,42 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     
     # Create access token
     access_token = auth_service.create_access_token(data={"sub": user.email})
+    refresh_token = auth_service.create_refresh_token(data={"sub": user.email})
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user_id": str(user.id)
+    }
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """Issue a new access token using a valid refresh token."""
+    auth_service = AuthService(db)
+    try:
+        decoded = auth_service.decode_token(payload.refresh_token)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    if decoded.get("type") != "refresh":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token type")
+
+    email = decoded.get("sub")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token payload")
+
+    user = auth_service.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    access_token = auth_service.create_access_token(data={"sub": user.email})
+    new_refresh_token = auth_service.create_refresh_token(data={"sub": user.email})
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+        "user_id": str(user.id),
     }
 
 

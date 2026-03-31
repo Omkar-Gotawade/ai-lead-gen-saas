@@ -12,7 +12,7 @@ from app.database import get_db
 from app.models.inbound_event import InboundEvent
 from app.models.lead import Lead
 from app.models.campaign_lead import CampaignLead, CampaignLeadStatus
-from app.models.sending_log import SendingLog
+from app.models.sending_log import SendingLog, SendStatus
 from app.services.webhook_parser import parse_sendgrid_event, parse_gmail_event, extract_email_address
 from app.services.audit_logger import AuditLogger
 from app.config import settings
@@ -127,12 +127,17 @@ async def process_webhook_event(
                 
             logger.info(f"Marked {len(campaign_leads)} campaign leads as replied for lead {lead.id}")
         
-        elif event_data.event_type == 'bounce' and lead:
+        elif event_data.event_type in ['bounce', 'failed'] and lead:
             # Mark lead as bounced and do_not_contact
             old_dnc = lead.do_not_contact
             lead.do_not_contact = True
             lead.bounce_reason = event_data.raw_data.get('reason', 'bounced')
             lead.bounced_at = event_data.timestamp or datetime.utcnow()
+
+            # Canonical production DNC fields
+            lead.is_do_not_contact = True
+            lead.dnc_reason = 'bounce'
+            lead.dnc_at = event_data.timestamp or datetime.utcnow()
 
             # Audit log the DNC change
             if not old_dnc:
@@ -160,11 +165,14 @@ async def process_webhook_event(
 
             logger.info(f"Marked lead {lead.id} as bounced")
         
-        elif event_data.event_type == 'spam' and lead:
+        elif event_data.event_type in ['spam', 'spam_report'] and lead:
             # Mark as do_not_contact
             old_dnc = lead.do_not_contact
             lead.do_not_contact = True
             lead.bounce_reason = 'spam_complaint'
+            lead.is_do_not_contact = True
+            lead.dnc_reason = 'spam_complaint'
+            lead.dnc_at = event_data.timestamp or datetime.utcnow()
 
             # Audit log the DNC change
             if not old_dnc:
@@ -190,17 +198,21 @@ async def process_webhook_event(
                 cl.stop_reason = 'spam_complaint'
                 cl.status = CampaignLeadStatus.STOPPED.value
         
-        # Log in sending_logs if we have a lead
-        if lead and event_data.event_type in ['delivered', 'bounce', 'reply']:
-            log_entry = SendingLog(
-                org_id=org_id,
-                lead_id=lead.id,
-                campaign_id=None,  # Could link if we track message_id to campaign
-                status='replied' if event_data.event_type == 'reply' else event_data.event_type,
-                provider_response=str(event_data.raw_data)[:500],
-                sent_at=event_data.timestamp or datetime.utcnow()
-            )
-            db.add(log_entry)
+        # Update related sending log status if possible
+        if event_data.message_id:
+            sending_log = db.query(SendingLog).filter(
+                SendingLog.message_id == event_data.message_id
+            ).first()
+            if sending_log:
+                if event_data.event_type == 'delivered':
+                    sending_log.status = SendStatus.SENT
+                    sending_log.sent_at = event_data.timestamp or datetime.utcnow()
+                elif event_data.event_type in ['bounce', 'failed', 'spam', 'spam_report']:
+                    sending_log.status = SendStatus.FAILED
+                    sending_log.error_message = str(event_data.raw_data)[:1000]
+                    sending_log.failed_at = event_data.timestamp or datetime.utcnow()
+                elif event_data.event_type == 'reply':
+                    sending_log.error_message = 'reply_received'
         
         db.commit()
         logger.info(f"Successfully processed {event_data.event_type} event for {search_email}")
@@ -278,6 +290,49 @@ async def sendgrid_webhook(
     except Exception as e:
         logger.error(f"Error handling SendGrid webhook: {e}", exc_info=True)
         # Always return 200 to prevent SendGrid from retrying
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/webhooks/email-events")
+async def generic_email_events_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Generic email-events webhook that supports bounce/failed/spam_report suppression."""
+    try:
+        payload = await request.json()
+        events = parse_sendgrid_event(payload)
+
+        for event in events:
+            org_id = event.raw_data.get('org_id') or settings.DEFAULT_ORG_ID
+            inbound_event = InboundEvent(
+                org_id=org_id,
+                provider='generic',
+                event_type=event.event_type,
+                provider_payload=event.raw_data,
+                parsed_from=event.from_email,
+                parsed_to=event.to_email,
+                parsed_subject=event.subject,
+                parsed_body_text=event.body_text,
+                parsed_message_id=event.message_id,
+                parsed_in_reply_to=event.in_reply_to,
+                processed='pending'
+            )
+            db.add(inbound_event)
+            db.commit()
+
+            background_tasks.add_task(
+                process_webhook_event,
+                'generic',
+                event,
+                org_id,
+                db,
+            )
+
+        return {"status": "ok", "events_received": len(events)}
+    except Exception as e:
+        logger.error(f"Error handling generic email-events webhook: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
