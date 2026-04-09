@@ -25,10 +25,20 @@ from ..services.pdl_service import PDLService
 from ..services.snov_service import SnovService
 from ..services.serp_scraper import SerpScraper
 from ..services.domain_crawler import DomainCrawler
+from ..services.hunter_service import HunterService
+from ..services.abstract_email_validator import AbstractEmailValidator
+from ..services.zenrows_scraper import ZenRowsScraper
+from ..services.apify_linkedin_service import ApifyLinkedInService
 from ..services.company_enrichment import CompanyEnrichmentService
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+_GENERIC_LOCAL_PARTS = frozenset({
+    "info", "contact", "support", "admin", "hello", "team", "sales", "hr",
+    "office", "billing", "noreply", "no-reply", "help", "service", "general",
+    "enquiries", "enquiry", "mail", "webmaster", "postmaster",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +55,17 @@ def _person_to_lead(db, person, job):
         return False
     first = person.get("first_name") or email.split("@")[0].split(".")[0].capitalize()
     last = person.get("last_name") or ""
+    enriched_data = {
+        "seniority": person.get("seniority"),
+        "company_domain": person.get("company_domain"),
+        "discovery_source": person.get("source"),
+        "location": person.get("location"),
+        "email_validation": person.get("email_validation") or None,
+        "company_summary": person.get("company_summary") or None,
+        "key_insights": person.get("key_insights") or None,
+        "pain_points": person.get("pain_points") or None,
+    }
+
     db.add(Lead(
         id=uuid.uuid4(),
         org_id=job.org_id,
@@ -57,12 +78,7 @@ def _person_to_lead(db, person, job):
         industry=person.get("industry") or job.industry or None,
         linkedin_url=person.get("linkedin_url") or None,
         source="lead_discovery",
-        enriched_data={
-            "seniority": person.get("seniority"),
-            "company_domain": person.get("company_domain"),
-            "discovery_source": person.get("source"),
-            "location": person.get("location"),
-        },
+        enriched_data={k: v for k, v in enriched_data.items() if v is not None},
     ))
     return True
 
@@ -86,6 +102,8 @@ def _store_person_as_domain_row(db, person, job_id):
         "industry":   person.get("industry", ""),
         "source":     person.get("source", ""),
         "company":    person.get("company", ""),
+        "email_validation": person.get("email_validation") or {},
+        "company_summary": person.get("company_summary", ""),
     }
     fn = person.get("first_name", "")
     ln = person.get("last_name", "")
@@ -101,6 +119,33 @@ def _store_person_as_domain_row(db, person, job_id):
         emails_found=person.get("email", ""),
         crawled_at=datetime.utcnow(),
     ))
+
+
+def _is_business_email(email: str) -> bool:
+    email = (email or "").strip().lower()
+    if "@" not in email:
+        return False
+    local = email.split("@", 1)[0]
+    return local not in _GENERIC_LOCAL_PARTS
+
+
+def _generate_candidate_emails(first_name: str, last_name: str, domain: str):
+    first = (first_name or "").strip().lower()
+    last = (last_name or "").strip().lower()
+    if not first or not domain:
+        return []
+
+    candidates = []
+    base_patterns = [
+        f"{first}@{domain}",
+        f"{first}.{last}@{domain}" if last else "",
+        f"{first[0]}{last}@{domain}" if last else "",
+        f"{first}{last[0]}@{domain}" if last else "",
+    ]
+    for email in base_patterns:
+        if email and email not in candidates and _is_business_email(email):
+            candidates.append(email)
+    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -129,9 +174,30 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
         apollo_key = (getattr(settings, "APOLLO_API_KEY", "") or "").strip()
         snov_id = (getattr(settings, "SNOV_CLIENT_ID", "") or "").strip()
         snov_secret = (getattr(settings, "SNOV_CLIENT_SECRET", "") or "").strip()
+        serp_key = (getattr(settings, "SERP_API_KEY", "") or "").strip()
+        hunter_key = (getattr(settings, "HUNTER_API_KEY", "") or "").strip()
+        zenrows_key = (getattr(settings, "ZENROWS_API_KEY", "") or "").strip()
+        abstract_key = (getattr(settings, "ABSTRACT_API_KEY", "") or "").strip()
+        apify_token = (getattr(settings, "APIFY_API_TOKEN", "") or "").strip()
 
         people = None
         pipeline = "serp_crawl"
+
+        # --- Pipeline 0: SERP -> ZenRows -> Gemini -> (Hunter or Apify) -> Abstract ---
+        if serp_key and (hunter_key or apify_token):
+            result = _serp_business_leads_pipeline(
+                job=job,
+                max_results=max_results,
+                serp_api_key=serp_key,
+                hunter_api_key=hunter_key,
+                zenrows_api_key=zenrows_key,
+                abstract_api_key=abstract_key,
+                apify_token=apify_token,
+            )
+            if result:
+                people, pipeline = result, "serp_zenrows_hunter_abstract"
+            else:
+                logger.warning("Business lead pipeline returned 0 leads -- falling through")
 
         # --- Pipeline 1: People Data Labs ---
         if pdl_key:
@@ -163,7 +229,7 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
             if result:
                 people, pipeline = result, "snov"
 
-        # --- Pipeline 3: SERP + crawl fallback ---
+        # --- Pipeline 5: SERP + crawl fallback ---
         if people is None:
             _serp_crawl_pipeline(job, max_results, db)
             db.refresh(job)
@@ -348,10 +414,15 @@ def _serp_crawl_pipeline(job, max_results, db):
                         logger.warning("Enrichment failed for %s: %s", dd.domain, e)
 
                 for email in result.get("emails", [])[:5]:
+                    if not _is_business_email(email):
+                        continue
                     if db.query(Lead).filter(Lead.email == email).first():
                         continue
                     local = email.split("@")[0]
                     parts = local.replace(".", " ").replace("_", " ").split()
+                    if len(parts) < 2:
+                        # Skip aliases like "hello@" that do not represent a person.
+                        continue
                     first = parts[0].capitalize() if parts else "Unknown"
                     last = parts[-1].capitalize() if len(parts) > 1 else ""
                     db.add(Lead(
@@ -375,3 +446,148 @@ def _serp_crawl_pipeline(job, max_results, db):
             dd.status = "failed"
             dd.error_message = str(e)
             db.commit()
+
+
+def _serp_business_leads_pipeline(
+    job,
+    max_results,
+    serp_api_key,
+    hunter_api_key,
+    zenrows_api_key,
+    abstract_api_key,
+    apify_token,
+):
+    """Discover real person leads with validated work emails.
+
+    Flow:
+    1) SERP finds company domains
+    2) ZenRows/DomainCrawler scrapes company website text
+    3) Gemini enriches company summary/insights
+    4) Hunter finds person emails at domain
+    5) Abstract validates emails
+    6) Apify optionally enriches missing LinkedIn profile URLs
+    """
+    scraper = SerpScraper(serp_api_key=serp_api_key)
+    domains = scraper.search_companies(
+        keywords=job.keywords,
+        location=job.location,
+        industry=job.industry,
+        max_results=min(max_results * 2, 50),
+    )
+    if not domains:
+        return []
+
+    hunter = HunterService(api_key=hunter_api_key) if hunter_api_key else None
+    zenrows = ZenRowsScraper(api_key=zenrows_api_key)
+    validator = AbstractEmailValidator(api_key=abstract_api_key) if abstract_api_key else None
+    apify = ApifyLinkedInService(api_token=apify_token) if apify_token else None
+
+    enrichment = None
+    gemini_key = (getattr(settings, "GEMINI_API_KEY", "") or "").strip()
+    if gemini_key:
+        try:
+            enrichment = CompanyEnrichmentService(
+                api_key=gemini_key,
+                model=getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash"),
+            )
+        except Exception as exc:
+            logger.warning("Could not initialize CompanyEnrichmentService: %s", exc)
+
+    people = []
+    per_domain_limit = max(2, min(8, (max_results // max(len(domains), 1)) + 1))
+
+    for domain_row in domains:
+        if len(people) >= max_results:
+            break
+
+        domain = (domain_row.get("domain") or "").strip().lower()
+        if not domain:
+            continue
+
+        scraped = zenrows.scrape_company(domain)
+        company_name = scraped.get("company_name") or domain_row.get("company_name") or domain
+        company_description = scraped.get("company_description") or ""
+        raw_content = scraped.get("raw_content") or ""
+
+        enriched = {}
+        if enrichment and raw_content:
+            try:
+                enriched = enrichment.enrich_company(
+                    company_name=company_name,
+                    company_description=company_description,
+                    raw_content=raw_content,
+                    domain=domain,
+                )
+            except Exception as exc:
+                logger.warning("Gemini enrichment failed for %s: %s", domain, exc)
+
+        if hunter:
+            raw_people = hunter.domain_search(domain=domain, company=company_name, limit=per_domain_limit * 2)
+        elif apify:
+            raw_people = apify.find_people_for_company(
+                company=company_name,
+                domain=domain,
+                job_title=getattr(job, "job_title", None),
+                location=job.location,
+                limit=per_domain_limit * 2,
+            )
+        else:
+            raw_people = []
+
+        for person in raw_people:
+            if len(people) >= max_results:
+                break
+
+            email = (person.get("email") or "").strip().lower()
+
+            # If Apify provided no direct email, generate candidates and validate.
+            if not email and apify:
+                first_name = person.get("first_name") or ""
+                last_name = person.get("last_name") or ""
+                for candidate in _generate_candidate_emails(first_name, last_name, domain):
+                    if validator:
+                        verdict = validator.validate(candidate)
+                        if verdict.get("is_deliverable"):
+                            email = candidate
+                            person["email_validation"] = verdict
+                            break
+                    else:
+                        # Without validator, prefer safer pattern only.
+                        email = candidate
+                        break
+
+            if not _is_business_email(email):
+                continue
+            person["email"] = email
+
+            if validator:
+                if not person.get("email_validation"):
+                    verdict = validator.validate(email)
+                    if not verdict.get("is_deliverable"):
+                        continue
+                    person["email_validation"] = verdict
+
+            first_name = (person.get("first_name") or "").strip()
+            last_name = (person.get("last_name") or "").strip()
+            full_name = (first_name + " " + last_name).strip()
+
+            if apify and not person.get("linkedin_url") and full_name:
+                profile_url = apify.find_linkedin_profile(full_name=full_name, company=company_name)
+                if profile_url:
+                    person["linkedin_url"] = profile_url
+
+            person["company"] = company_name
+            person["company_domain"] = domain
+            person["industry"] = (
+                person.get("industry")
+                or enriched.get("industry")
+                or job.industry
+                or ""
+            )
+            person["company_summary"] = enriched.get("summary") or company_description
+            person["key_insights"] = enriched.get("key_insights")
+            person["pain_points"] = enriched.get("pain_points")
+            person["source"] = "serp+hunter"
+            people.append(person)
+
+    return people[:max_results]

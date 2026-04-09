@@ -10,6 +10,7 @@ import {
   Edit2, 
   Trash2, 
   Sparkles,
+  Linkedin,
   CheckSquare,
   Square,
   ChevronLeft,
@@ -166,6 +167,12 @@ const Leads = () => {
 
   const totalPages = Math.ceil(total / pageSize);
 
+  const withProtocol = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `https://${url}`;
+  };
+
   return (
     <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Page header */}
@@ -280,6 +287,17 @@ const Leads = () => {
                       </td>
                       <td className="text-right pr-4">
                         <div className="flex items-center justify-end gap-1">
+                          {lead.linkedin_url && (
+                            <a
+                              href={withProtocol(lead.linkedin_url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-md text-ink-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="View LinkedIn profile"
+                            >
+                              <Linkedin className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                           <button
                             onClick={() => { setSelectedLead(lead); setShowComposer(true); }}
                             className="p-1.5 rounded-md text-ink-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"

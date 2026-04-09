@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Google Gemini - READ FROM .env FILE
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_RESEARCH_MODEL: str = ""
+    GEMINI_RESEARCH_ENABLE_WEB_SEARCH: bool = True
     
     # Encryption (for sensitive data like SMTP passwords) - READ FROM .env FILE
     ENCRYPTION_KEY: str = ""
@@ -41,6 +43,10 @@ class Settings(BaseSettings):
     
     # v1: Lead Discovery & Enrichment - READ FROM .env FILE
     SERP_API_KEY: str = ""  # Optional: SerpAPI key for better search results
+    ZENROWS_API_KEY: str = ""  # Optional: ZenRows key for website scraping
+    APIFY_API_TOKEN: str = ""  # Optional: Apify token for LinkedIn/profile enrichment
+    HUNTER_API_KEY: str = ""  # Optional: Hunter.io key for business email discovery
+    ABSTRACT_API_KEY: str = ""  # Optional: Abstract email validation key
     ENRICHMENT_API_KEY: str = ""  # For LinkedIn enrichment (Clearbit/Apollo/Snov)
     ENRICHMENT_PROVIDER: str = "clearbit"  # clearbit, apollo, or snov
     # Note: Company enrichment uses GEMINI_API_KEY (already configured above)

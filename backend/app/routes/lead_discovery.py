@@ -34,9 +34,9 @@ async def start_lead_discovery(
     """Start a new lead discovery job.
 
     Automatically selects the best available source:
-      1. Apollo.io  (if APOLLO_API_KEY is configured)
-      2. Hunter.io  (if HUNTER_API_KEY is configured)
-      3. SERP + website crawl (fallback)
+            1. SerpAPI -> ZenRows -> Gemini -> Hunter -> Abstract (business leads)
+            2. PDL / Icypeas / Apollo / Snov fallbacks (when configured)
+            3. SERP + website crawl legacy fallback
     """
     try:
         job = LeadDiscoveryJob(

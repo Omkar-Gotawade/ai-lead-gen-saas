@@ -16,6 +16,8 @@ class EmailGenerateResponse(BaseModel):
     """Generated email response."""
     subject: str
     body: str
+    research_notes: Optional[str] = None
+    research_status: Optional[str] = None
 
 
 class EmailSendRequest(BaseModel):
