@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { generateEmail, sendTestEmail } from '../api/email';
 
 export default function EmailComposer({ lead, onClose, onSend, emailProviderConfigured = false }) {
@@ -66,8 +67,8 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
@@ -225,6 +226,7 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
