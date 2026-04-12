@@ -2,6 +2,8 @@
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+import random
+import time
 from app.celery_app import celery_app
 from app.database import SessionLocal
 from app.models.email_provider import EmailProviderSettings
@@ -27,7 +29,9 @@ def send_email_task(
     to_email: str,
     subject: str,
     body: str,
-    lead_id: Optional[str] = None
+    lead_id: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    step_index: Optional[int] = None,
 ):
     """
     Celery task to send an email with duplicate prevention.
@@ -46,11 +50,18 @@ def send_email_task(
 
     try:
         # Generate unique message_id for deduplication
+        context_parts = []
+        if campaign_id:
+            context_parts.append(f"campaign:{campaign_id}")
+        if step_index is not None:
+            context_parts.append(f"step:{step_index}")
+
         message_id = RedisService.generate_message_id(
             user_id=user_id,
             lead_id=lead_id or "none",
             subject=subject,
-            body=body
+            body=body,
+            context="|".join(context_parts),
         )
 
         logger.info(f"Processing email task: message_id={message_id}, to={to_email}")
@@ -135,6 +146,9 @@ def send_email_task(
             db.commit()
 
         try:
+            # Rate control jitter to reduce bursty send patterns.
+            time.sleep(random.randint(30, 90))
+
             # Send email
             send_email(
                 provider_settings=provider,

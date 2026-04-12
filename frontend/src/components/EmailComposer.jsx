@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { generateEmail, sendTestEmail } from '../api/email';
+import { RotateCcw, Wrench } from 'lucide-react';
+import { checkSpam, generateEmail, sendTestEmail } from '../api/email';
+import SpamScoreCard from './SpamScoreCard';
+import IssueList from './IssueList';
 
 export default function EmailComposer({ lead, onClose, onSend, emailProviderConfigured = false }) {
   const [tone, setTone] = useState('professional');
@@ -10,8 +13,29 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
   const [body, setBody] = useState('');
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [loadingSend, setLoadingSend] = useState(false);
+  const [checkingSpam, setCheckingSpam] = useState(false);
+  const [applyingFixes, setApplyingFixes] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [spamResult, setSpamResult] = useState(null);
+
+  const runSpamAnalysis = async (emailBody) => {
+    setCheckingSpam(true);
+    try {
+      const result = await checkSpam({
+        email_body: emailBody,
+        lead_id: lead?.id || null,
+        campaign_id: null,
+      });
+      setSpamResult(result);
+      return result;
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to run spam check');
+      return null;
+    } finally {
+      setCheckingSpam(false);
+    }
+  };
 
   const handleGenerate = async () => {
     setLoadingGenerate(true);
@@ -27,12 +51,67 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
       
       setSubject(data.subject);
       setBody(data.body);
-      setSuccess('Email generated successfully!');
+      const spam = await runSpamAnalysis(data.body);
+
+      if (spam?.level === 'critical') {
+        setSuccess('Email generated, but spam risk is critical. Apply fixes or regenerate.');
+      } else if (spam?.level === 'warning') {
+        setSuccess('Email generated with warnings. Review issues before sending.');
+      } else {
+        setSuccess('Email generated successfully!');
+      }
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate email');
     } finally {
       setLoadingGenerate(false);
+    }
+  };
+
+  const handleApplyFixes = async () => {
+    if (!body) {
+      return;
+    }
+
+    setApplyingFixes(true);
+    setError('');
+
+    try {
+      const replacements = {
+        free: 'complimentary',
+        guarantee: 'aim to',
+        urgent: 'timely',
+        win: 'improve',
+      };
+
+      let fixed = body;
+
+      Object.entries(replacements).forEach(([word, replacement]) => {
+        fixed = fixed.replace(new RegExp(`\\b${word}\\b`, 'gi'), replacement);
+      });
+
+      fixed = fixed.replace(/!{2,}/g, '!');
+
+      let linkSeen = false;
+      fixed = fixed.replace(/(https?:\/\/\S+|www\.\S+)/gi, (match) => {
+        if (!linkSeen) {
+          linkSeen = true;
+          return match;
+        }
+        return '';
+      });
+
+      if (lead?.company && !fixed.toLowerCase().includes(lead.company.toLowerCase())) {
+        fixed += `\n\nP.S. I put this together specifically for ${lead.company}.`;
+      }
+
+      setBody(fixed);
+      await runSpamAnalysis(fixed);
+
+      setSuccess('Applied spam-safety fixes. Please review the updated draft.');
+      setTimeout(() => setSuccess(''), 3000);
+    } finally {
+      setApplyingFixes(false);
     }
   };
 
@@ -157,6 +236,29 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                   '✨ Generate Email with AI'
                 )}
               </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleApplyFixes}
+                  disabled={applyingFixes || !body}
+                  className="w-full border border-amber-300 text-amber-800 py-2 px-3 rounded-md hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                >
+                  <Wrench className="w-4 h-4" />
+                  {applyingFixes ? 'Fixing...' : 'Fix'}
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  disabled={loadingGenerate}
+                  className="w-full border border-blue-300 text-blue-800 py-2 px-3 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Regenerate
+                </button>
+              </div>
+
+              {checkingSpam && (
+                <p className="text-xs text-slate-500">Running spam check...</p>
+              )}
             </div>
           </div>
 
@@ -169,6 +271,13 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
           {success && (
             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm">
               {success}
+            </div>
+          )}
+
+          {spamResult && (
+            <div className="mb-4 space-y-3">
+              <SpamScoreCard score={spamResult.score} level={spamResult.level} />
+              <IssueList issues={spamResult.issues} />
             </div>
           )}
 

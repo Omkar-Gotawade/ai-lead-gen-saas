@@ -351,6 +351,13 @@ Email Context:
 - If you mention their scale/size, be specific with numbers ("55 countries" not "massive scale")
 - Don't state the obvious ("must be challenging" adds no value - skip it)
 
+=== DELIVERABILITY RULES (MANDATORY) ===
+- Avoid spam trigger words: free, guarantee, urgent, win
+- Keep sentence length short and readable
+- Include personalization using lead/company context
+- Include at most 1 link in the body
+- Keep the tone conversational and human, not promotional
+
 === SPECIFICITY REQUIREMENTS ===
 - If research_notes mentions numbers (employees, countries, offices), USE THEM in your email
 - If research_notes mentions recent activity (product launch, funding, hiring), REFERENCE IT in first sentence

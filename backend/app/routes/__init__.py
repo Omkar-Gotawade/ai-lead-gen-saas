@@ -8,6 +8,7 @@ from .campaigns import router as campaigns_router
 from .sequence_steps import router as sequence_steps_router
 from .lead_discovery import router as lead_discovery_router
 from .ai_config import router as ai_config_router
+from .spam_check import router as spam_check_router
 
 __all__ = [
     "auth_router",
@@ -18,5 +19,6 @@ __all__ = [
     "campaigns_router",
     "sequence_steps_router",
     "lead_discovery_router",
-    "ai_config_router"
+    "ai_config_router",
+    "spam_check_router",
 ]

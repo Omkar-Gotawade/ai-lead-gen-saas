@@ -39,3 +39,8 @@ export async function getEmailLogs(leadId) {
   const response = await axios.get(`/api/email/logs?lead_id=${leadId}`);
   return response.data;
 }
+
+export async function checkSpam(data) {
+  const response = await axios.post('/api/spam-check', data);
+  return response.data;
+}

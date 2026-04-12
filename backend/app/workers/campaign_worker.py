@@ -13,6 +13,13 @@ from app.workers.email_worker import send_email_task
 from app.services.ai_email_service import generate_email
 from app.services.audit_logger import AuditLogger
 from app.services.campaign_guard import enforce_campaign_send_limit
+from app.services.spam_check_service import (
+    analyze_email,
+    can_send_email,
+    enforce_behavior_safety,
+    get_user_domain_authentication,
+    get_user_sending_behavior,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,44 +35,71 @@ def check_pending_campaigns():
     
     try:
         now = datetime.utcnow()
-        
-        # Find all campaign leads that are ready to send
+
+        # Pull ready candidates first, then reserve each row atomically before dispatching.
         pending_leads = db.query(CampaignLead).filter(
             CampaignLead.status.in_([
                 CampaignLeadStatus.PENDING.value,
-                CampaignLeadStatus.IN_PROGRESS.value
+                CampaignLeadStatus.IN_PROGRESS.value,
             ]),
-            CampaignLead.next_run_at <= now
+            CampaignLead.next_run_at <= now,
         ).all()
-        
+
         print(f"Found {len(pending_leads)} campaign leads ready to process")
-        
+
+        reservation_until = now + timedelta(minutes=15)
+
         for campaign_lead in pending_leads:
             # Check if campaign is still active
             campaign = db.query(Campaign).filter(
                 Campaign.id == campaign_lead.campaign_id,
-                Campaign.status == 'active'
+                Campaign.status == 'active',
             ).first()
-            
+
             if not campaign:
                 print(f"Campaign {campaign_lead.campaign_id} not active, skipping")
                 continue
-            
+
             # Determine which step to run
             if campaign_lead.status == CampaignLeadStatus.PENDING.value:
                 step_index = 1  # Start from first step
             else:
                 step_index = campaign_lead.last_step_index + 1
-            
-            print(f"Triggering step {step_index} for campaign_lead {campaign_lead.id}")
-            
-            # Trigger the sequence step
-            run_sequence_step.delay(str(campaign_lead.id), step_index)
-            
-            # Update next_run_at to prevent duplicate triggering
-            campaign_lead.next_run_at = now + timedelta(days=999)
-            
-        db.commit()
+
+            # Reserve this lead row with an optimistic update to avoid duplicate dispatch.
+            reserved_rows = db.query(CampaignLead).filter(
+                CampaignLead.id == campaign_lead.id,
+                CampaignLead.status == campaign_lead.status,
+                CampaignLead.next_run_at == campaign_lead.next_run_at,
+            ).update(
+                {
+                    CampaignLead.status: CampaignLeadStatus.QUEUED.value,
+                    CampaignLead.next_run_at: reservation_until,
+                },
+                synchronize_session=False,
+            )
+
+            if reserved_rows != 1:
+                continue
+
+            db.commit()
+
+            try:
+                print(f"Triggering step {step_index} for campaign_lead {campaign_lead.id}")
+                run_sequence_step.delay(str(campaign_lead.id), step_index)
+            except Exception:
+                # Release reservation on dispatch failure so beat can retry.
+                db.query(CampaignLead).filter(
+                    CampaignLead.id == campaign_lead.id,
+                ).update(
+                    {
+                        CampaignLead.status: CampaignLeadStatus.PENDING.value,
+                        CampaignLead.next_run_at: datetime.utcnow() + timedelta(minutes=1),
+                    },
+                    synchronize_session=False,
+                )
+                db.commit()
+                raise
         
     except Exception as e:
         print(f"Error in check_pending_campaigns: {str(e)}")
@@ -181,17 +215,42 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             return
 
         # Enforce daily warmup send cap and pause when limit reached
-        enforce_campaign_send_limit(
+        deferred_until = enforce_campaign_send_limit(
             db=db,
             campaign_id=campaign.id,
             campaign_lead_id=campaign_lead.id,
             user_id=campaign.user_id,
         )
 
-        db.refresh(campaign_lead)
-        if campaign_lead.status == CampaignLeadStatus.STOPPED.value and campaign_lead.stop_reason == 'Daily limit reached':
-            logger.warning(f"Campaign lead {campaign_lead.id} paused due to daily limit")
+        if deferred_until is not None:
+            logger.info(
+                "Daily quota reached for user %s; deferred campaign_lead %s until %s",
+                campaign.user_id,
+                campaign_lead.id,
+                deferred_until,
+            )
             return
+
+        behavior = get_user_sending_behavior(db=db, user_id=campaign.user_id)
+        should_pause_campaign = enforce_behavior_safety(
+            db=db,
+            campaign=campaign,
+            bounce_rate=behavior["bounce_rate"],
+            spam_rate=behavior["spam_rate"],
+        )
+        if should_pause_campaign:
+            logger.warning(
+                "Campaign %s paused due to behavior thresholds (bounce_rate=%.4f, spam_rate=%.4f)",
+                campaign.id,
+                behavior["bounce_rate"],
+                behavior["spam_rate"],
+            )
+            campaign_lead.status = CampaignLeadStatus.STOPPED.value
+            campaign_lead.stop_reason = "Campaign paused due to bounce/spam rate"
+            db.commit()
+            return
+
+        domain_auth = get_user_domain_authentication(db=db, user_id=campaign.user_id)
         
         # Get user for sender name
         from app.models.user import User
@@ -232,6 +291,33 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             # Use template rendering (original behavior)
             subject = render_template(step.subject_template, lead)
             body = render_template(step.body_template, lead)
+
+        analysis = analyze_email(
+            email_body=body,
+            company_name=lead.company,
+            bounce_rate=behavior["bounce_rate"],
+            spam_rate=behavior["spam_rate"],
+            spf_configured=domain_auth["spf_configured"],
+            dkim_configured=domain_auth["dkim_configured"],
+        )
+
+        if not can_send_email(analysis):
+            campaign_lead.status = CampaignLeadStatus.STOPPED.value
+            campaign_lead.stop_reason = "spam_check_blocked"
+            db.commit()
+            logger.warning(
+                "Blocked send for campaign_lead %s due to critical spam check: %s",
+                campaign_lead.id,
+                analysis["issues"],
+            )
+            return
+
+        if analysis["level"] == "warning":
+            logger.warning(
+                "Spam warning for campaign_lead %s: %s",
+                campaign_lead.id,
+                analysis["issues"],
+            )
         
         # Send email
         send_email_task.delay(
@@ -239,7 +325,9 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             to_email=lead.email,
             subject=subject,
             body=body,
-            lead_id=str(lead.id)
+            lead_id=str(lead.id),
+            campaign_id=str(campaign.id),
+            step_index=step_index,
         )
         
         # Update campaign lead

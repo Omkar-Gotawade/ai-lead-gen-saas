@@ -82,7 +82,8 @@ class RedisService:
         user_id: str,
         lead_id: str,
         subject: str,
-        body: str
+        body: str,
+        context: str = ""
     ) -> str:
         """
         Generate a unique message ID based on recipients content.
@@ -95,12 +96,13 @@ class RedisService:
             lead_id: Lead/recipient ID
             subject: Email subject
             body: Email body
+            context: Optional extra dedupe context (e.g., campaign_id:step_index)
 
         Returns:
             str: Unique message ID (hex hash)
         """
         # Create deterministic hash from email components
-        content = f"{user_id}:{lead_id}:{subject}:{body}"
+        content = f"{user_id}:{lead_id}:{subject}:{body}:{context}"
         hash_obj = hashlib.sha256(content.encode('utf-8'))
         message_id = hash_obj.hexdigest()[:32]  # First 32 chars
         return message_id
