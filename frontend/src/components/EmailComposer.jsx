@@ -5,6 +5,38 @@ import { checkSpam, generateEmail, sendTestEmail } from '../api/email';
 import SpamScoreCard from './SpamScoreCard';
 import IssueList from './IssueList';
 
+function normalizeForMatch(value) {
+  if (!value) return '';
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function ensureCompanyMention(body, company) {
+  if (!company) return body;
+
+  const normalizedBody = normalizeForMatch(body);
+  const normalizedCompany = normalizeForMatch(company);
+  if (!normalizedCompany || normalizedBody.includes(normalizedCompany)) {
+    return body;
+  }
+
+  const companyLine = `This is specifically for ${company}.`;
+  if (/best regards,/i.test(body)) {
+    return body.replace(/\n\s*best regards,/i, `\n\n${companyLine}\n\nBest regards,`);
+  }
+
+  return `${body.trim()}\n\n${companyLine}`;
+}
+
+function isFixableIssue(issue = '') {
+  const text = issue.toLowerCase();
+  return (
+    text.includes('spam keywords detected') ||
+    text.includes('excessive exclamation marks') ||
+    text.includes('too many links') ||
+    text.includes('no personalization: company name missing')
+  );
+}
+
 export default function EmailComposer({ lead, onClose, onSend, emailProviderConfigured = false }) {
   const [tone, setTone] = useState('professional');
   const [goal, setGoal] = useState('schedule a meeting');
@@ -77,6 +109,16 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
     setError('');
 
     try {
+      const currentIssues = spamResult?.issues || [];
+      const hasFixableIssues = currentIssues.some(isFixableIssue);
+
+      if (!hasFixableIssues) {
+        await runSpamAnalysis(body);
+        setSuccess('No content fixes needed. Remaining items (if any) require domain/reputation setup, not text edits.');
+        setTimeout(() => setSuccess(''), 4000);
+        return;
+      }
+
       const replacements = {
         free: 'complimentary',
         guarantee: 'aim to',
@@ -101,14 +143,24 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
         return '';
       });
 
-      if (lead?.company && !fixed.toLowerCase().includes(lead.company.toLowerCase())) {
-        fixed += `\n\nP.S. I put this together specifically for ${lead.company}.`;
+      // Never add postscript lines; add a normal sentence only when company truly missing.
+      fixed = ensureCompanyMention(fixed, lead?.company);
+
+      // Strip any existing postscript content from previous drafts.
+      fixed = fixed.replace(/\n\s*p\.?\s*s\.?\s*:?.*$/is, '').trim();
+
+      const changed = fixed !== body;
+
+      if (changed) {
+        setBody(fixed);
       }
 
-      setBody(fixed);
-      await runSpamAnalysis(fixed);
+      const latestBody = changed ? fixed : body;
+      await runSpamAnalysis(latestBody);
 
-      setSuccess('Applied spam-safety fixes. Please review the updated draft.');
+      setSuccess(changed
+        ? 'Applied spam-safety fixes. Please review the updated draft.'
+        : 'No text changes were required for the detected fixable checks.');
       setTimeout(() => setSuccess(''), 3000);
     } finally {
       setApplyingFixes(false);

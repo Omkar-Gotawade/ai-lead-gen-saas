@@ -1,23 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Upload, 
-  Users, 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  Mail, 
-  Edit2, 
-  Trash2, 
+import React, { useState, useMemo } from 'react';
+import {
+  Plus,
+  Upload,
+  Users,
+  Search,
+  Mail,
+  Edit2,
+  Trash2,
   Sparkles,
   Linkedin,
-  CheckSquare,
-  Square,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  X,
 } from 'lucide-react';
-import { leadsAPI } from '../api';
-import { getEmailProvider } from '../api/email';
+
+import { useLeads } from '../hooks/useLeads';
+import { useToast } from '../context/ToastContext';
+
 import CreateLeadModal from '../components/CreateLeadModal';
 import EditLeadModal from '../components/EditLeadModal';
 import DeleteLeadModal from '../components/DeleteLeadModal';
@@ -26,21 +25,21 @@ import EmailComposer from '../components/EmailComposer';
 import AddToCampaignModal from '../components/AddToCampaignModal';
 
 import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import { Card, CardContent } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import { Alert, AlertDescription } from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 const Leads = () => {
-  const [leads, setLeads] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(50);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [emailProviderConfigured, setEmailProviderConfigured] = useState(false);
-  
+  const toast = useToast();
+  const {
+    leads, total, page, pageSize, loading, error,
+    emailProviderConfigured, enrichingLeads,
+    canGoPrev, canGoNext,
+    setPage,
+    createLead, updateLead, deleteLead, uploadCSV, enrichLead,
+  } = useLeads();
+
+  /* ── Modal + selection state ─────────────────────────────── */
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -48,42 +47,29 @@ const Leads = () => {
   const [showComposer, setShowComposer] = useState(false);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [enrichingLeads, setEnrichingLeads] = useState(new Set());
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
 
-  useEffect(() => {
-    fetchLeads();
-    checkEmailProvider();
-  }, [page]);
+  /* ── Client-side search ───────────────────────────────────── */
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchLeads = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await leadsAPI.getLeads(page, pageSize);
-      setLeads(response.data.leads);
-      setTotal(response.data.total);
-    } catch (err) {
-      setError('Failed to fetch leads');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const filteredLeads = useMemo(() => {
+    if (!searchQuery.trim()) return leads;
+    const q = searchQuery.toLowerCase();
+    return leads.filter(
+      (l) =>
+        l.full_name?.toLowerCase().includes(q) ||
+        l.email?.toLowerCase().includes(q) ||
+        l.company?.toLowerCase().includes(q) ||
+        l.title?.toLowerCase().includes(q),
+    );
+  }, [leads, searchQuery]);
 
-  const checkEmailProvider = async () => {
-    try {
-      await getEmailProvider();
-      setEmailProviderConfigured(true);
-    } catch (err) {
-      setEmailProviderConfigured(false);
-    }
-  };
-
+  /* ── Handlers ─────────────────────────────────────────────── */
   const handleCreateLead = async (data) => {
     try {
-      await leadsAPI.createLead(data);
+      await createLead(data);
       setShowCreateModal(false);
-      fetchLeads();
+      toast.success('Lead added successfully.');
     } catch (err) {
       throw new Error(err.response?.data?.detail || 'Failed to create lead');
     }
@@ -91,10 +77,10 @@ const Leads = () => {
 
   const handleEditLead = async (data) => {
     try {
-      await leadsAPI.updateLead(selectedLead.id, data);
+      await updateLead(selectedLead.id, data);
       setShowEditModal(false);
       setSelectedLead(null);
-      fetchLeads();
+      toast.success('Lead updated.');
     } catch (err) {
       throw new Error(err.response?.data?.detail || 'Failed to update lead');
     }
@@ -102,10 +88,10 @@ const Leads = () => {
 
   const handleDeleteLead = async () => {
     try {
-      await leadsAPI.deleteLead(selectedLead.id);
+      await deleteLead(selectedLead.id);
       setShowDeleteModal(false);
       setSelectedLead(null);
-      fetchLeads();
+      toast.success('Lead deleted.');
     } catch (err) {
       throw new Error(err.response?.data?.detail || 'Failed to delete lead');
     }
@@ -113,66 +99,40 @@ const Leads = () => {
 
   const handleCSVUpload = async (file) => {
     try {
-      await leadsAPI.uploadCSV(file);
+      await uploadCSV(file);
       setShowCSVModal(false);
-      fetchLeads();
+      toast.success('CSV imported successfully.');
     } catch (err) {
       throw new Error(err.response?.data?.detail || 'Failed to upload CSV');
     }
   };
 
   const handleEnrichLead = async (leadId) => {
-    setEnrichingLeads(prev => new Set(prev).add(leadId));
     try {
-      await leadsAPI.enrichLead(leadId);
-      setTimeout(() => {
-        fetchLeads();
-        setEnrichingLeads(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(leadId);
-          return newSet;
-        });
-      }, 3000);
-    } catch (err) {
-      setEnrichingLeads(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(leadId);
-        return newSet;
-      });
-      alert('Failed to enrich lead');
+      await enrichLead(leadId);
+    } catch {
+      toast.error('Failed to enrich lead. Please try again.');
     }
   };
 
   const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedLeadIds(leads.map(lead => lead.id));
-    } else {
-      setSelectedLeadIds([]);
-    }
+    setSelectedLeadIds(e.target.checked ? filteredLeads.map((l) => l.id) : []);
   };
 
   const handleSelectLead = (leadId) => {
-    setSelectedLeadIds(prev => {
-      if (prev.includes(leadId)) {
-        return prev.filter(id => id !== leadId);
-      } else {
-        return [...prev, leadId];
-      }
-    });
+    setSelectedLeadIds((prev) =>
+      prev.includes(leadId) ? prev.filter((id) => id !== leadId) : [...prev, leadId],
+    );
   };
 
-  const handleCampaignSuccess = () => {
-    setSelectedLeadIds([]);
+  const withProtocol = (url) => {
+    if (!url) return '';
+    return url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
   };
 
   const totalPages = Math.ceil(total / pageSize);
 
-  const withProtocol = (url) => {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `https://${url}`;
-  };
-
+  /* ── Render ───────────────────────────────────────────────── */
   return (
     <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Page header */}
@@ -220,10 +180,61 @@ const Leads = () => {
         </Alert>
       )}
 
+      {/* Search bar */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by name, email, company…"
+          className="w-full pl-9 pr-8 py-2 text-sm border border-ink-200 rounded-lg bg-surface text-ink-800 placeholder-ink-400
+                     focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700 transition-colors"
+            aria-label="Clear search"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
       {/* Table card */}
       <Card className="overflow-hidden">
         {loading ? (
-          <LoadingSpinner size="md" text="Loading leads…" />
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="w-10 px-4 py-3" />
+                  <th>Name</th><th>Email</th><th>Company</th>
+                  <th>Title</th><th>Source</th>
+                  <th className="text-right pr-5">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="border-b border-ink-50">
+                    <td className="px-4 py-3 w-10"><div className="skeleton h-3.5 w-3.5 rounded" /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="skeleton w-7 h-7 rounded-full shrink-0" />
+                        <div className="skeleton h-4 w-28 rounded" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><div className="skeleton h-4 w-36 rounded" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-4 w-24 rounded" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-3 w-20 rounded" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-5 w-14 rounded-full" /></td>
+                    <td className="px-4 py-3 text-right pr-4"><div className="skeleton h-4 w-20 rounded ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -232,7 +243,7 @@ const Leads = () => {
                   <th className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedLeadIds.length === leads.length && leads.length > 0}
+                      checked={selectedLeadIds.length === filteredLeads.length && filteredLeads.length > 0}
                       onChange={handleSelectAll}
                       className="w-3.5 h-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                     />
@@ -246,20 +257,26 @@ const Leads = () => {
                 </tr>
               </thead>
               <tbody>
-                {leads.length === 0 ? (
+                {filteredLeads.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="py-16 text-center text-ink-400">
                       <div className="flex flex-col items-center gap-3">
                         <Users className="w-10 h-10 text-ink-200" />
                         <div>
-                          <p className="font-medium text-ink-600">No leads yet</p>
-                          <p className="text-sm mt-0.5">Add a lead manually or import a CSV</p>
+                          <p className="font-medium text-ink-600">
+                            {searchQuery ? 'No matching leads' : 'No leads yet'}
+                          </p>
+                          <p className="text-sm mt-0.5">
+                            {searchQuery
+                              ? 'Try a different search term'
+                              : 'Add a lead manually or import a CSV'}
+                          </p>
                         </div>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  leads.map((lead) => (
+                  filteredLeads.map((lead) => (
                     <tr key={lead.id}>
                       <td className="w-10 px-4">
                         <input
@@ -354,17 +371,29 @@ const Leads = () => {
             <span className="font-semibold text-ink-700">{total}</span>
           </p>
           <div className="flex gap-1.5">
-            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1} icon={<ChevronLeft className="w-3.5 h-3.5" />}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page - 1)}
+              disabled={!canGoPrev}
+              icon={<ChevronLeft className="w-3.5 h-3.5" />}
+            >
               Prev
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(total / pageSize)}>
-              Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page + 1)}
+              disabled={!canGoNext}
+              iconEnd={<ChevronRight className="w-3.5 h-3.5" />}
+            >
+              Next
             </Button>
           </div>
         </div>
       )}
 
-      {/* Modals — unchanged logic */}
+      {/* Modals */}
       <CreateLeadModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onSubmit={handleCreateLead} />
       <EditLeadModal
         isOpen={showEditModal}
@@ -391,11 +420,10 @@ const Leads = () => {
         isOpen={showCampaignModal}
         onClose={() => setShowCampaignModal(false)}
         selectedLeadIds={selectedLeadIds}
-        onSuccess={handleCampaignSuccess}
+        onSuccess={() => setSelectedLeadIds([])}
       />
     </div>
   );
 };
 
 export default Leads;
-

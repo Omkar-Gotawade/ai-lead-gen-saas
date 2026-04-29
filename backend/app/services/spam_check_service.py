@@ -23,6 +23,31 @@ BOUNCE_RATE_THRESHOLD = 0.02
 SPAM_RATE_THRESHOLD = 0.003
 
 
+def _normalize_for_match(value: str) -> str:
+    """Normalize text for robust company/persona containment checks."""
+    if not value:
+        return ""
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def _mentions_company(body: str, company_name: str) -> bool:
+    """Check company mention while tolerating spaces/punctuation differences."""
+    if not company_name:
+        return True
+
+    body_lower = (body or "").lower()
+    company_lower = company_name.lower().strip()
+    if not company_lower:
+        return True
+
+    if company_lower in body_lower:
+        return True
+
+    body_norm = _normalize_for_match(body_lower)
+    company_norm = _normalize_for_match(company_lower)
+    return bool(company_norm and company_norm in body_norm)
+
+
 def calculate_spam_score(issues: List[str]) -> Tuple[int, str]:
     """Calculate score/level based on issue count."""
     score = min(100, len(issues) * 20)
@@ -121,7 +146,7 @@ def analyze_email(
     if link_count > MAX_LINKS:
         issues.append("Too many links")
 
-    if company_name and company_name.strip() and company_name.lower() not in body_lower:
+    if company_name and company_name.strip() and not _mentions_company(body, company_name):
         issues.append("No personalization: company name missing")
 
     if bounce_rate > BOUNCE_RATE_THRESHOLD:

@@ -32,6 +32,15 @@ const bottomNav = [
   { name: 'Pricing',  to: '/pricing',  icon: CreditCard },
 ]
 
+/* Helper: find the display name for the current path */
+const allNav = [...mainNav, ...bottomNav]
+function getPageTitle(pathname) {
+  const match = allNav.find(
+    (item) => pathname === item.to || pathname.startsWith(item.to + '/')
+  )
+  return match?.name ?? ''
+}
+
 /* ─── Sub-components ────────────────────────────────────────── */
 function NavItem({ item, isActive, onClick }) {
   const Icon = item.icon
@@ -39,20 +48,28 @@ function NavItem({ item, isActive, onClick }) {
     <Link
       to={item.to}
       onClick={onClick}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 select-none ${
+      className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-200 select-none ${
         isActive
           ? 'bg-white/10 text-white'
-          : 'text-sidebar-text hover:bg-sidebar-hover hover:text-white'
+          : 'text-sidebar-text hover:bg-white/5 hover:text-white'
       }`}
     >
-      <Icon
-        className={`w-4 h-4 shrink-0 transition-colors duration-150 ${
-          isActive ? 'text-brand-400' : 'text-sidebar-muted group-hover:text-sidebar-text'
+      {/* Icon with active-state pill */}
+      <span
+        className={`w-6 h-6 shrink-0 flex items-center justify-center rounded-md transition-all duration-200 ${
+          isActive
+            ? 'bg-brand-500/25 text-brand-300 scale-105'
+            : 'text-sidebar-muted group-hover:text-white/70'
         }`}
-      />
-      <span className="truncate">{item.name}</span>
+      >
+        <Icon className="w-[15px] h-[15px]" />
+      </span>
+
+      <span className="truncate flex-1">{item.name}</span>
+
+      {/* Active dot */}
       {isActive && (
-        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0 opacity-80" />
       )}
     </Link>
   )
@@ -79,8 +96,8 @@ function Sidebar({ onClose }) {
   return (
     <aside className="flex flex-col w-60 h-full bg-sidebar-bg border-r border-sidebar-border shadow-sidebar sidebar-scroll overflow-y-auto">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 h-[60px] shrink-0 border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center shadow-md shrink-0">
+      <div className="flex items-center gap-2.5 px-4 h-[60px] shrink-0 border-b border-sidebar-border group cursor-default">
+        <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center shadow-md shrink-0 transition-transform duration-200 group-hover:scale-105">
           <Zap className="w-4 h-4 text-white" />
         </div>
         <span className="text-white font-bold text-[15px] tracking-tight">Lead Gen AI</span>
@@ -153,9 +170,19 @@ function Sidebar({ onClose }) {
 /* ─── Layout ────────────────────────────────────────────────── */
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
+  const pageTitle = getPageTitle(location.pathname)
 
   return (
     <div className="flex h-screen bg-canvas overflow-hidden">
+      {/* Accessibility: skip to main content */}
+      <a
+        href="#main-content"
+        className="skip-link"
+      >
+        Skip to content
+      </a>
+
       {/* Desktop sidebar — always visible */}
       <div className="hidden md:flex shrink-0">
         <Sidebar />
@@ -185,6 +212,7 @@ const Layout = () => {
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-sidebar-text hover:text-white transition-colors"
+            aria-label="Open navigation menu"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -192,12 +220,14 @@ const Layout = () => {
             <div className="w-6 h-6 rounded-md bg-gradient-brand flex items-center justify-center">
               <Zap className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-white font-semibold text-sm">Lead Gen AI</span>
+            <span className="text-white font-semibold text-sm">
+              {pageTitle || 'Lead Gen AI'}
+            </span>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main id="main-content" className="flex-1 overflow-y-auto" tabIndex={-1}>
           <div className="page-enter">
             <Outlet />
           </div>

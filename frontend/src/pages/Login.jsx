@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Mail, Lock, Zap, ArrowRight, CheckCircle } from 'lucide-react'
+import { Mail, Zap, ArrowRight, CheckCircle } from 'lucide-react'
+import PasswordInput from '../components/ui/PasswordInput'
 
 const features = [
   'AI-powered lead discovery across 50M+ contacts',
@@ -132,24 +133,20 @@ const Login = () => {
               {/* Password */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-ink-300">Password</label>
+                  <label htmlFor="login-password" className="text-xs font-medium text-ink-300">Password</label>
                   <a href="#" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
                     Forgot password?
                   </a>
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-500 pointer-events-none" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-ink-600
-                               focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
-                  />
-                </div>
+                <PasswordInput
+                  id="login-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  dark
+                  autoComplete="current-password"
+                />
               </div>
 
               {/* Submit */}

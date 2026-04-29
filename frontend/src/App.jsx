@@ -1,49 +1,66 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { AuthProvider } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import ErrorBoundary from './components/ErrorBoundary'
-import Login from './pages/Login'
-import Signup from './pages/Signup'
-import Leads from './pages/Leads'
-import Campaigns from './pages/Campaigns'
-import CampaignEditor from './pages/CampaignEditor'
-import MetricsDashboard from './pages/MetricsDashboard'
-import WebhooksDebug from './pages/WebhooksDebug'
-import Deliverability from './pages/Deliverability'
-import DiscoverLeadsPage from './pages/DiscoverLeadsPage'
-import Settings from './pages/Settings'
-import Pricing from './pages/Pricing'
+import LoadingSpinner from './components/ui/LoadingSpinner'
 import Layout from './components/Layout'
+
+/* ─── Lazy-loaded pages for code splitting ──────────────────── */
+const Login            = lazy(() => import('./pages/Login'))
+const Signup           = lazy(() => import('./pages/Signup'))
+const Leads            = lazy(() => import('./pages/Leads'))
+const Campaigns        = lazy(() => import('./pages/Campaigns'))
+const CampaignEditor   = lazy(() => import('./pages/CampaignEditor'))
+const MetricsDashboard = lazy(() => import('./pages/MetricsDashboard'))
+const WebhooksDebug    = lazy(() => import('./pages/WebhooksDebug'))
+const Deliverability   = lazy(() => import('./pages/Deliverability'))
+const DiscoverLeadsPage = lazy(() => import('./pages/DiscoverLeadsPage'))
+const Settings         = lazy(() => import('./pages/Settings'))
+const Pricing          = lazy(() => import('./pages/Pricing'))
+
+/* ─── Inline page-load fallback ────────────────────────────── */
+const PageFallback = () => (
+  <div className="flex items-center justify-center h-full min-h-[400px]">
+    <LoadingSpinner size="md" text="Loading…" />
+  </div>
+)
 
 function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Navigate to="/leads" replace />} />
-              <Route path="leads" element={<Leads />} />
-              <Route path="discover-leads" element={<DiscoverLeadsPage />} />
-              <Route path="campaigns" element={<Campaigns />} />
-              <Route path="campaigns/:campaignId" element={<CampaignEditor />} />
-              <Route path="metrics" element={<MetricsDashboard />} />
-              <Route path="webhooks" element={<WebhooksDebug />} />
-              <Route path="deliverability" element={<Deliverability />} />
-              <Route path="pricing" element={<Pricing />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-          </Routes>
-        </Router>
+        <ToastProvider>
+          <Router>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/login"  element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <Layout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<Navigate to="/leads" replace />} />
+                  <Route path="leads"              element={<Leads />} />
+                  <Route path="discover-leads"     element={<DiscoverLeadsPage />} />
+                  <Route path="campaigns"          element={<Campaigns />} />
+                  <Route path="campaigns/:campaignId" element={<CampaignEditor />} />
+                  <Route path="metrics"            element={<MetricsDashboard />} />
+                  <Route path="webhooks"           element={<WebhooksDebug />} />
+                  <Route path="deliverability"     element={<Deliverability />} />
+                  <Route path="pricing"            element={<Pricing />} />
+                  <Route path="settings"           element={<Settings />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </Router>
+        </ToastProvider>
       </AuthProvider>
     </ErrorBoundary>
   )

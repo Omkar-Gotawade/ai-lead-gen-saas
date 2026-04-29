@@ -1,187 +1,106 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-  Plus, 
-  Play, 
-  Pause, 
-  Edit, 
-  Trash2, 
-  Calendar, 
-  Mail, 
+import {
+  Plus,
+  Play,
+  Pause,
+  Trash2,
+  Calendar,
+  Mail,
   ArrowRight,
-  MoreHorizontal,
-  AlertTriangle,
-  Info,
-  Shield
 } from 'lucide-react';
-import { getCampaigns, createCampaign, deleteCampaign, activateCampaign, pauseCampaign } from '../api/campaigns';
-import axios from '../api/axios';
+
+import { useCampaigns } from '../hooks/useCampaigns';
+import { useToast } from '../context/ToastContext';
 
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
 import EmptyState from '../components/ui/EmptyState';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 function Campaigns() {
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const toast = useToast();
+  const {
+    campaigns,
+    loading,
+    error,
+    hasEmailProvider,
+    warmupStatus,
+    setError,
+    createNewCampaign,
+    removeCampaign,
+    toggleCampaignStatus,
+  } = useCampaigns();
+
+  /* ── Create form state ────────────────────────────────────── */
+  const [newCampaign, setNewCampaign] = useState({ name: '', description: '' });
   const [isCreating, setIsCreating] = useState(false);
-  const [hasEmailProvider, setHasEmailProvider] = useState(true);
-  const [warmupStatus, setWarmupStatus] = useState(null);
-  
-  // Form state for creating new campaign
-  const [newCampaign, setNewCampaign] = useState({
-    name: '',
-    description: ''
-  });
 
-  useEffect(() => {
-    fetchCampaigns();
-    checkEmailProvider();
-    fetchWarmupStatus();
-  }, []);
+  /* ── Confirm delete dialog state ──────────────────────────── */
+  const [pendingDelete, setPendingDelete] = useState(null); // { id, name }
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const checkEmailProvider = async () => {
-    try {
-      const response = await axios.get('/api/email-provider/me');
-      // Backend returns null if no provider, or an object with configured=true if provider exists
-      const hasProvider = response.data !== null && response.data !== undefined;
-      setHasEmailProvider(hasProvider);
-      console.log('Email provider check:', { hasProvider, data: response.data });
-    } catch (err) {
-      console.error('Error checking email provider:', err);
-      setHasEmailProvider(false);
-    }
-  };
-
-  const fetchWarmupStatus = async () => {
-    try {
-      const response = await axios.get('/api/deliverability/warmup/status');
-      setWarmupStatus(response.data);
-    } catch (err) {
-      console.error('Error fetching warmup status:', err);
-    }
-  };
-
-  const fetchCampaigns = async () => {
-    try {
-      setLoading(true);
-      const data = await getCampaigns();
-      setCampaigns(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching campaigns:', err);
-      setError('Failed to load campaigns');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  /* ── Handlers ─────────────────────────────────────────────── */
   const handleCreateCampaign = async (e) => {
     e.preventDefault();
-    
+
     if (!hasEmailProvider) {
       setError('Email provider must be configured before creating campaigns');
       return;
     }
-
     if (!newCampaign.name.trim()) {
       setError('Campaign name is required');
       return;
     }
-
     if (newCampaign.name.trim().length < 3) {
       setError('Campaign name must be at least 3 characters');
       return;
     }
-
-    if (isCreating) return; // Prevent double-submit
+    if (isCreating) return;
 
     try {
       setIsCreating(true);
       setError(null);
-      await createCampaign({
-        name: newCampaign.name,
-        description: newCampaign.description,
-        status: 'draft'
-      });
-      
+      await createNewCampaign(newCampaign);
       setNewCampaign({ name: '', description: '' });
-      await fetchCampaigns();
+      toast.success('Campaign created.', 'Success');
     } catch (err) {
-      console.error('Error creating campaign:', err);
       setError(err.response?.data?.detail || 'Failed to create campaign');
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleDeleteCampaign = async (campaignId, campaignName) => {
-    const confirmMessage = `Delete "${campaignName}" campaign? This cannot be undone.`;
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteCampaign(campaignId);
-      await fetchCampaigns();
+      await removeCampaign(pendingDelete.id);
+      toast.success(`"${pendingDelete.name}" deleted.`);
+      setPendingDelete(null);
     } catch (err) {
-      console.error('Error deleting campaign:', err);
       setError(err.response?.data?.detail || 'Failed to delete campaign');
+      setPendingDelete(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const handleEditCampaign = (campaignId) => {
-    navigate(`/campaigns/${campaignId}`);
-  };
-
-  const handleToggleCampaignStatus = async (campaign) => {
-    const isActivating = campaign.status !== 'active';
-    
-    if (isActivating) {
-      // Show confirmation with warmup info
-      const confirmMessage = warmupStatus 
-        ? `Activate "${campaign.name}"?\n\nWarmup Day ${warmupStatus.warmup_day}/21\nDaily Limit: ${warmupStatus.daily_limit} emails\nUsed Today: ${warmupStatus.used_today}/${warmupStatus.daily_limit}`
-        : `Activate "${campaign.name}"?`;
-      
-      if (!window.confirm(confirmMessage)) {
-        return;
-      }
-    }
-
+  const handleToggleStatus = async (campaign) => {
     try {
-      if (campaign.status === 'active') {
-        await pauseCampaign(campaign.id);
-      } else {
-        await activateCampaign(campaign.id);
-      }
-      await fetchCampaigns();
+      await toggleCampaignStatus(campaign);
+      const action = campaign.status === 'active' ? 'paused' : 'activated';
+      toast.success(`Campaign ${action}.`);
     } catch (err) {
-      console.error('Error updating campaign status:', err);
       setError(err.response?.data?.detail || 'Failed to update campaign status');
     }
   };
 
-  const getStatusVariant = (status) => {
-    switch (status) {
-      case 'active':
-        return 'success';
-      case 'paused':
-        return 'warning';
-      case 'draft':
-        return 'secondary';
-      case 'completed':
-        return 'default';
-      default:
-        return 'secondary';
-    }
-  };
-
+  /* ── Render ───────────────────────────────────────────────── */
   return (
     <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -269,20 +188,38 @@ function Campaigns() {
         </Alert>
       )}
 
-      {/* Campaigns table */}
+      {/* Campaigns table / empty state */}
       <Card className="overflow-hidden">
         {loading ? (
-          <LoadingSpinner size="md" text="Loading campaigns…" />
-        ) : campaigns.length === 0 ? (
-          <div className="py-16 flex flex-col items-center gap-3 text-center">
-            <div className="w-12 h-12 rounded-full bg-ink-100 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-ink-400" />
-            </div>
-            <div>
-              <p className="font-semibold text-ink-700">No campaigns yet</p>
-              <p className="text-sm text-ink-400 mt-0.5">Create your first campaign above to get started</p>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th><th>Description</th>
+                  <th>Status</th><th>Control</th>
+                  <th>Created</th><th className="text-right pr-5">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b border-ink-50">
+                    <td className="px-4 py-3"><div className="skeleton h-4 w-32 rounded" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-4 w-48 rounded" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-8 w-20 rounded-lg" /></td>
+                    <td className="px-4 py-3"><div className="skeleton h-4 w-24 rounded" /></td>
+                    <td className="px-4 py-3 text-right pr-4"><div className="skeleton h-4 w-20 rounded ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        ) : campaigns.length === 0 ? (
+          <EmptyState
+            icon={<Mail />}
+            title="No campaigns yet"
+            description="Create your first email campaign above to start reaching your leads."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -307,9 +244,9 @@ function Campaigns() {
                       <Badge
                         variant={
                           campaign.status === 'active' ? 'success'
-                          : campaign.status === 'paused' ? 'warning'
-                          : campaign.status === 'completed' ? 'info'
-                          : 'default'
+                            : campaign.status === 'paused' ? 'warning'
+                            : campaign.status === 'completed' ? 'info'
+                            : 'default'
                         }
                         dot
                         size="xs"
@@ -323,7 +260,7 @@ function Campaigns() {
                         <Button
                           size="xs"
                           variant="outline"
-                          onClick={() => handleToggleCampaignStatus(campaign)}
+                          onClick={() => handleToggleStatus(campaign)}
                           icon={<Play className="w-3 h-3" />}
                           className="border-success/30 text-emerald-700 hover:bg-success/8"
                         >
@@ -333,7 +270,7 @@ function Campaigns() {
                         <Button
                           size="xs"
                           variant="outline"
-                          onClick={() => handleToggleCampaignStatus(campaign)}
+                          onClick={() => handleToggleStatus(campaign)}
                           icon={<Pause className="w-3 h-3" />}
                           className="border-warning/30 text-amber-700 hover:bg-warning/8"
                         >
@@ -351,14 +288,14 @@ function Campaigns() {
                         <Button
                           size="xs"
                           variant="ghost"
-                          onClick={() => handleEditCampaign(campaign.id)}
+                          onClick={() => navigate(`/campaigns/${campaign.id}`)}
                           className="text-brand-600 hover:bg-brand-50"
                         >
                           Edit
                           <ArrowRight className="w-3 h-3 ml-1" />
                         </Button>
                         <button
-                          onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
+                          onClick={() => setPendingDelete({ id: campaign.id, name: campaign.name })}
                           className="p-1.5 rounded-md text-ink-400 hover:text-danger hover:bg-danger/8 transition-colors"
                           title="Delete"
                         >
@@ -373,9 +310,20 @@ function Campaigns() {
           </div>
         )}
       </Card>
+
+      {/* Confirm delete dialog */}
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+        title="Delete Campaign"
+        message={`Are you sure you want to delete "${pendingDelete?.name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        loading={isDeleting}
+      />
     </div>
   );
 }
 
 export default Campaigns;
-

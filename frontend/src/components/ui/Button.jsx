@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Button = ({
+const Button = React.forwardRef(function Button({
   children,
   variant = 'primary',
   size = 'md',
@@ -11,9 +11,10 @@ const Button = ({
   isLoading = false,
   fullWidth = false,
   icon = null,
+  iconEnd = null,
   className = '',
   ...props
-}) => {
+}, ref) {
   const isLoadingState = loading || isLoading;
 
   const base = [
@@ -43,6 +44,7 @@ const Button = ({
 
   return (
     <button
+      ref={ref}
       type={type}
       onClick={onClick}
       disabled={disabled || isLoadingState}
@@ -67,10 +69,11 @@ const Button = ({
         <>
           {icon && <span className="shrink-0">{icon}</span>}
           {children}
+          {iconEnd && <span className="shrink-0">{iconEnd}</span>}
         </>
       )}
     </button>
   );
-};
+});
 
 export default Button;

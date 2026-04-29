@@ -1,16 +1,168 @@
-"""AI email generation service using Google Gemini."""
-from typing import Optional, List, Tuple, Dict, Any
-import google.generativeai as genai
+"""AI email generation service using OpenRouter."""
+from typing import Optional, List, Dict, Any
+import asyncio
+import logging
+import time
+import requests
 from app.config import settings
 from app.models.lead import Lead
 from pydantic import BaseModel
 import re
 
 
+logger = logging.getLogger(__name__)
+
+
 class GeneratedEmail(BaseModel):
     """Generated email response."""
     subject: str
     body: str
+
+
+def _normalize_text_for_match(value: str) -> str:
+    """Normalize text for robust fuzzy containment checks."""
+    if not value:
+        return ""
+    normalized = value.lower()
+    return re.sub(r"[^a-z0-9]", "", normalized)
+
+
+def _body_mentions_company(body: str, company: str) -> bool:
+    """Return True when the body references the company despite punctuation/spacing variance."""
+    body_lower = (body or "").lower()
+    company_lower = (company or "").lower().strip()
+    if not company_lower:
+        return True
+
+    if company_lower in body_lower:
+        return True
+
+    body_norm = _normalize_text_for_match(body_lower)
+    company_norm = _normalize_text_for_match(company_lower)
+    return bool(company_norm and company_norm in body_norm)
+
+
+def _strip_postscript(body: str) -> str:
+    """Remove trailing postscript (P.S.) blocks from generated content."""
+    if not body:
+        return body
+    return re.sub(r"\n\s*(p\.?\s*s\.?\s*:?).*$", "", body, flags=re.IGNORECASE | re.DOTALL).strip()
+
+
+def _build_openrouter_headers() -> Dict[str, str]:
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    if settings.OPENROUTER_HTTP_REFERER:
+        headers["HTTP-Referer"] = settings.OPENROUTER_HTTP_REFERER
+    if settings.OPENROUTER_APP_NAME:
+        headers["X-Title"] = settings.OPENROUTER_APP_NAME
+    return headers
+
+
+def _parse_retry_delay(response: requests.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return max(1.0, float(retry_after))
+        except ValueError:
+            pass
+    return min(20.0, 2.0 ** attempt)
+
+
+def _request_openrouter_completion(prompt: str) -> str:
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    candidate_models: List[str] = []
+    if settings.OPENROUTER_MODEL and settings.OPENROUTER_MODEL.strip():
+        candidate_models.append(settings.OPENROUTER_MODEL.strip())
+
+    fallback_raw = (settings.OPENROUTER_FALLBACK_MODELS or "").strip()
+    if fallback_raw:
+        for model in fallback_raw.split(","):
+            model_id = model.strip()
+            if model_id and model_id not in candidate_models:
+                candidate_models.append(model_id)
+
+    if not candidate_models:
+        raise ValueError("No OpenRouter models configured. Set OPENROUTER_MODEL.")
+
+    max_retries = 4
+    last_error: Optional[str] = None
+    rate_limited_models: List[str] = []
+
+    for model_id in candidate_models:
+        payload = {
+            "model": model_id,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            "temperature": 0.7,
+        }
+
+        model_rate_limited = False
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    url,
+                    headers=_build_openrouter_headers(),
+                    json=payload,
+                    timeout=60,
+                )
+
+                if response.status_code == 404:
+                    response_text = (response.text or "").lower()
+                    if "no endpoints found" in response_text:
+                        last_error = (
+                            f"OpenRouter model '{model_id}' is unavailable for this account."
+                        )
+                        logger.warning(last_error)
+                        break
+
+                if response.status_code == 429:
+                    model_rate_limited = True
+                    delay_seconds = _parse_retry_delay(response, attempt)
+                    logger.warning(
+                        "OpenRouter rate limited model %s (attempt %s/%s). Retrying in %.1fs.",
+                        model_id,
+                        attempt + 1,
+                        max_retries,
+                        delay_seconds,
+                    )
+                    if attempt < max_retries - 1:
+                        time.sleep(delay_seconds)
+                    continue
+
+                response.raise_for_status()
+                data = response.json()
+                choices = data.get("choices") or []
+                if not choices:
+                    raise ValueError("OpenRouter returned no choices")
+                message = choices[0].get("message") or {}
+                content = (message.get("content") or "").strip()
+                if not content:
+                    raise ValueError("OpenRouter returned empty content")
+                return content
+            except requests.RequestException as exc:
+                last_error = f"{model_id}: {exc}"
+                if attempt >= max_retries - 1:
+                    break
+                time.sleep(min(20.0, 2.0 ** attempt))
+
+        if model_rate_limited:
+            rate_limited_models.append(model_id)
+            continue
+
+    if rate_limited_models:
+        raise ValueError(
+            "OpenRouter rate limit hit for all configured models: "
+            + ", ".join(rate_limited_models)
+        )
+
+    raise ValueError(f"OpenRouter request failed after {max_retries} attempts: {last_error}")
 
 
 # Banned phrases that make emails sound too generic or AI-generated
@@ -147,6 +299,10 @@ def _check_email_quality(email: GeneratedEmail, lead: Lead) -> List[str]:
     for phrase in BANNED_PHRASES:
         if phrase in body_lower:
             issues.append(f"Contains banned phrase: '{phrase}'")
+
+    # Disallow P.S. sections.
+    if re.search(r"(^|\n)\s*p\.?\s*s\.?\s*:?,?", email.body, flags=re.IGNORECASE):
+        issues.append("Contains postscript (P.S.) which is not allowed")
     
     # Check word count (30-150 words in body, excluding signature)
     # Remove signature for word count
@@ -161,8 +317,8 @@ def _check_email_quality(email: GeneratedEmail, lead: Lead) -> List[str]:
     if lead.first_name and lead.first_name.lower() not in body_lower:
         issues.append(f"Lead's first name '{lead.first_name}' not used in email body")
     
-    # Check if company is mentioned (if available)
-    if lead.company and lead.company.lower() not in body_lower:
+    # Check if company is mentioned (if available), allowing punctuation/spacing variance.
+    if lead.company and not _body_mentions_company(email.body, lead.company):
         issues.append(f"Company name '{lead.company}' not mentioned in email")
     
     # CRITICAL: If any research context exists, ensure email references specific details
@@ -233,7 +389,7 @@ async def generate_email(
     product_description: str = "our product"
 ) -> GeneratedEmail:
     """
-    Generate personalized email copy using Google Gemini with quality validation.
+    Generate personalized email copy using OpenRouter with quality validation.
     
     Uses manual research notes when available to create highly personalized emails
     that reference specific, recent information about the lead or their company.
@@ -252,14 +408,10 @@ async def generate_email(
         GeneratedEmail with subject and body
         
     Raises:
-        ValueError: If GEMINI_API_KEY not configured or generation fails
+        ValueError: If OPENROUTER_API_KEY not configured or generation fails
     """
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured")
-    
-    # Configure Gemini
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.GEMINI_MODEL)
+    if not settings.OPENROUTER_API_KEY:
+        raise ValueError("OPENROUTER_API_KEY not configured")
     
     # Build enriched context from lead data
     lead_context_parts = [f"- Name: {lead.first_name} {lead.last_name}"]
@@ -342,6 +494,7 @@ Email Context:
    
 5. SIGNATURE:
    - End with: "Best regards,\\n{sender_name}"
+    - Do NOT add any P.S. or postscript line after signature
 
 === WRITING STYLE RULES ===
 - Use short, punchy sentences (10-15 words average, 20 max)
@@ -463,6 +616,7 @@ SUBJECT: [short, specific subject line - 3-6 words]
 
 Best regards,
 {sender_name}
+Do not include any P.S.
 """
     
     max_attempts = 2
@@ -471,8 +625,7 @@ Best regards,
     
     for attempt in range(max_attempts):
         try:
-            response = model.generate_content(prompt)
-            content = response.text.strip()
+            content = await asyncio.to_thread(_request_openrouter_completion, prompt)
             
             # Parse response
             if "---" in content:
@@ -491,6 +644,7 @@ Best regards,
                 subject = lines[0].replace("SUBJECT:", "").strip() if lines else "Follow-up"
                 body = lines[1].strip() if len(lines) > 1 else content
             
+            body = _strip_postscript(body)
             email = GeneratedEmail(subject=subject, body=body)
             
             # Check quality

@@ -109,64 +109,108 @@ export default function MetricsDashboard() {
       {
         label: 'Emails Sent',
         data: timeline.data.map(d => d.sent),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.3
+        borderColor: '#7c3aed',
+        backgroundColor: 'rgba(124, 58, 237, 0.08)',
+        tension: 0.4,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
       },
       {
         label: 'Delivered',
         data: timeline.data.map(d => d.delivered),
-        borderColor: 'rgb(34, 197, 94)',
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        tension: 0.3
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        tension: 0.4,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
       },
       {
         label: 'Replies',
         data: timeline.data.map(d => d.replies),
-        borderColor: 'rgb(168, 85, 247)',
-        backgroundColor: 'rgba(168, 85, 247, 0.1)',
-        tension: 0.3
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+        tension: 0.4,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
       },
       {
         label: 'Bounces',
         data: timeline.data.map(d => d.bounces),
-        borderColor: 'rgb(239, 68, 68)',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        tension: 0.3
-      }
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        tension: 0.4,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      },
     ]
   } : null;
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
         position: 'top',
+        labels: {
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 16,
+          font: { size: 12, family: 'Inter, sans-serif' },
+          color: '#64748b',
+        },
       },
-      title: {
-        display: false,
+      title: { display: false },
+      tooltip: {
+        backgroundColor: '#0f1117',
+        borderColor: '#1e293b',
+        borderWidth: 1,
+        cornerRadius: 10,
+        titleFont: { size: 12, family: 'Inter, sans-serif' },
+        bodyFont: { size: 12, family: 'Inter, sans-serif' },
+        padding: 10,
       },
     },
     scales: {
       y: {
         beginAtZero: true,
-        grid: {
-          color: '#f1f5f9'
-        }
+        grid: { color: '#f1f5f9' },
+        ticks: { font: { size: 11, family: 'Inter, sans-serif' }, color: '#94a3b8' },
       },
       x: {
-        grid: {
-          display: false
-        }
-      }
-    }
+        grid: { display: false },
+        ticks: { font: { size: 11, family: 'Inter, sans-serif' }, color: '#94a3b8' },
+      },
+    },
   };
 
   if (authLoading || loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <LoadingSpinner size="lg" text="Loading analytics…" />
+      <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
+        <div>
+          <div className="skeleton h-8 w-32 rounded mb-2" />
+          <div className="skeleton h-4 w-56 rounded" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-surface border border-ink-100 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="skeleton h-3 w-24 rounded" />
+                <div className="skeleton w-8 h-8 rounded-lg" />
+              </div>
+              <div className="skeleton h-9 w-20 rounded mb-3" />
+              <div className="skeleton h-5 w-16 rounded-full" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-surface border border-ink-100 rounded-xl p-5">
+          <div className="skeleton h-6 w-40 rounded mb-4" />
+          <div className="skeleton h-64 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -254,18 +298,24 @@ export default function MetricsDashboard() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { label: 'Unique Leads Contacted', value: overview.unique_leads_contacted, icon: Users },
-                { label: 'Avg Opens per Lead', value: '—', icon: TrendingUp },
-                { label: 'Best Performing Day', value: '—', icon: Calendar },
-                { label: 'Avg Response Time', value: '—', icon: Clock },
-              ].map(({ label, value, icon: Icon }) => (
+                { label: 'Unique Leads Contacted', value: overview.unique_leads_contacted, icon: Users, isReal: true },
+                { label: 'Avg Opens per Lead',      value: null, icon: TrendingUp },
+                { label: 'Best Performing Day',     value: null, icon: Calendar },
+                { label: 'Avg Response Time',       value: null, icon: Clock },
+              ].map(({ label, value, icon: Icon, isReal }) => (
                 <div key={label} className="flex items-start gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center shrink-0">
                     <Icon className="w-4 h-4 text-ink-400" />
                   </div>
                   <div>
                     <p className="text-xs text-ink-400">{label}</p>
-                    <p className="text-lg font-semibold text-ink-800 mt-0.5">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+                    {isReal ? (
+                      <p className="text-lg font-semibold text-ink-800 mt-0.5">
+                        {typeof value === 'number' ? value.toLocaleString() : value}
+                      </p>
+                    ) : (
+                      <span className="coming-soon mt-0.5">coming soon</span>
+                    )}
                   </div>
                 </div>
               ))}

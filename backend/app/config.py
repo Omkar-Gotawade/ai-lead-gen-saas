@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-1.5-flash"
     GEMINI_RESEARCH_MODEL: str = ""
     GEMINI_RESEARCH_ENABLE_WEB_SEARCH: bool = True
+
+    # OpenRouter (used for AI email generation)
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "google/gemma-4-31b-it:free"
+    OPENROUTER_FALLBACK_MODELS: str = "openai/gpt-oss-20b:free,google/gemma-3-4b-it:free"
+    OPENROUTER_HTTP_REFERER: str = ""
+    OPENROUTER_APP_NAME: str = "lead-gen"
     
     # Encryption (for sensitive data like SMTP passwords) - READ FROM .env FILE
     ENCRYPTION_KEY: str = ""

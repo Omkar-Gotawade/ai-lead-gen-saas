@@ -31,9 +31,9 @@ function isPeoplePipeline(discoveredDomains) {
 
 //  Seniority badge colour 
 const SENIORITY_VARIANTS = {
-  c_suite: "destructive", founder: "destructive",
-  vp: "default", director: "default",
-  manager: "secondary", senior: "secondary",
+  c_suite: "danger",  founder: "danger",
+  vp:      "brand",  director: "brand",
+  manager: "default", senior: "default",
 }
 
 //  Person card (Apollo / Snov results) 
@@ -55,44 +55,44 @@ function PersonCard({ domain }) {
   const location = person?.location || ""
 
   return (
-    <div className="flex items-start gap-3 p-4 border border-slate-100 rounded-lg bg-white hover:border-blue-200 hover:shadow-sm transition-all">
+    <div className="flex items-start gap-3 p-4 border border-ink-100 rounded-lg bg-surface hover:border-brand-200 hover:shadow-soft transition-all">
       {/* Avatar */}
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+      <div className="w-10 h-10 rounded-full bg-gradient-brand flex items-center justify-center text-white font-semibold text-sm shrink-0">
         {name.charAt(0).toUpperCase()}
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-slate-900 text-sm">{name}</span>
+          <span className="font-semibold text-ink-900 text-sm">{name}</span>
           {seniority && (
-            <Badge variant={SENIORITY_VARIANTS[seniority] || "outline"} className="text-[10px] px-1.5 py-0 h-4 capitalize">
+            <Badge variant={SENIORITY_VARIANTS[seniority] || "default"} size="xs" className="capitalize">
               {seniority.replace("_", " ")}
             </Badge>
           )}
           {source && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-slate-400 border-slate-200">
+            <Badge variant="default" size="xs" className="text-ink-400 border-ink-200">
               {source}
             </Badge>
           )}
         </div>
-        {title && <p className="text-xs text-slate-600 mt-0.5 truncate">{title}</p>}
+        {title && <p className="text-xs text-ink-600 mt-0.5 truncate">{title}</p>}
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           {company && (
-            <span className="flex items-center gap-1 text-xs text-slate-500">
+            <span className="flex items-center gap-1 text-xs text-ink-500">
               <Building2 className="w-3 h-3" />{company}
             </span>
           )}
           {location && (
-            <span className="flex items-center gap-1 text-xs text-slate-500">
+            <span className="flex items-center gap-1 text-xs text-ink-500">
               <MapPin className="w-3 h-3" />{location}
             </span>
           )}
         </div>
         {email && (
           <div className="flex items-center gap-1 mt-1">
-            <Mail className="w-3 h-3 text-green-600" />
-            <span className="text-xs text-green-700 font-medium truncate">{email}</span>
+            <Mail className="w-3 h-3 text-success" />
+            <span className="text-xs text-emerald-700 font-medium truncate">{email}</span>
           </div>
         )}
       </div>
@@ -103,7 +103,7 @@ function PersonCard({ domain }) {
           href={linkedin}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0 p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          className="shrink-0 p-1.5 rounded text-ink-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
           title="View LinkedIn profile"
         >
           <Linkedin className="w-4 h-4" />
@@ -119,10 +119,10 @@ function SourceBadge({ domains }) {
   const sources = [...new Set(domains.map((d) => parsePerson(d)?.source).filter(Boolean))]
   if (sources.length === 0) return null
   return (
-    <div className="flex items-center gap-2 text-xs text-slate-500">
+    <div className="flex items-center gap-2 text-xs text-ink-500">
       <span>Source:</span>
       {sources.map((s) => (
-        <Badge key={s} variant="outline" className="text-xs capitalize px-2">
+        <Badge key={s} variant="default" size="xs" className="capitalize">
           {s === "apollo" ? "Apollo.io" : s === "snov" ? "Snov.io" : s === "pdl" ? "People Data Labs" : s === "icypeas" ? "Icypeas" : s}
         </Badge>
       ))}
@@ -256,14 +256,14 @@ export default function DiscoverLeadsPage() {
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  className="flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
                 >
                   {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   {showAdvanced ? "Hide" : "Show"} advanced filters
                 </button>
 
                 {showAdvanced && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 border-t border-slate-100">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 border-t border-ink-100">
                     <Input
                       label="Job Title (optional)"
                       name="job_title"
@@ -273,12 +273,12 @@ export default function DiscoverLeadsPage() {
                       icon={<User className="w-4 h-4" />}
                     />
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Seniority (optional)</label>
+                      <label className="block text-xs font-medium text-ink-600 mb-1.5">Seniority (optional)</label>
                       <select
                         name="seniority"
                         value={formData.seniority}
                         onChange={handleChange}
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                       >
                         <option value="">Any seniority</option>
                         <option value="founder">Founder / Owner</option>
@@ -305,7 +305,7 @@ export default function DiscoverLeadsPage() {
                 <Button type="submit" isLoading={loading} className="w-full" icon={<Zap className="w-4 h-4" />}>
                   {loading ? "Searching for leads" : "Find Leads"}
                 </Button>
-                <p className="text-xs text-slate-400 text-center">
+                <p className="text-xs text-ink-400 text-center">
                   Uses PDL → Icypeas → Apollo → Snov.io → Web Crawl (whichever is configured)
                 </p>
               </CardFooter>
@@ -337,29 +337,29 @@ export default function DiscoverLeadsPage() {
               <CardContent className="space-y-5">
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 mb-1">{peoplePipeline ? "People Found" : "Domains Found"}</p>
-                    <p className="font-semibold text-slate-900 text-lg">{jobStatus.job.domains_found}</p>
+                  <div className="p-3 bg-ink-50 rounded-lg">
+                    <p className="text-xs text-ink-500 mb-1">{peoplePipeline ? "People Found" : "Domains Found"}</p>
+                    <p className="font-semibold text-ink-900 text-lg">{jobStatus.job.domains_found}</p>
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 mb-1">{peoplePipeline ? "Processed" : "Crawled"}</p>
-                    <p className="font-semibold text-slate-900 text-lg">{jobStatus.job.domains_crawled}</p>
+                  <div className="p-3 bg-ink-50 rounded-lg">
+                    <p className="text-xs text-ink-500 mb-1">{peoplePipeline ? "Processed" : "Crawled"}</p>
+                    <p className="font-semibold text-ink-900 text-lg">{jobStatus.job.domains_crawled}</p>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                    <p className="text-xs text-green-600 mb-1">Leads Saved</p>
-                    <p className="font-semibold text-green-700 text-lg">{jobStatus.job.leads_created}</p>
+                  <div className="p-3 bg-success/8 rounded-lg border border-success/20">
+                    <p className="text-xs text-success mb-1">Leads Saved</p>
+                    <p className="font-semibold text-emerald-700 text-lg">{jobStatus.job.leads_created}</p>
                   </div>
                 </div>
 
                 {/* Progress bar (only while running) */}
                 {jobStatus.job.status === "running" && (
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs text-slate-500">
+                    <div className="flex justify-between text-xs text-ink-500">
                       <span>Progress</span><span>{jobStatus.progress_percent}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2">
+                    <div className="w-full bg-ink-100 rounded-full h-2">
                       <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                        className="bg-brand-600 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${jobStatus.progress_percent}%` }}
                       />
                     </div>
@@ -376,7 +376,7 @@ export default function DiscoverLeadsPage() {
                 {peoplePipeline && jobStatus.discovered_domains.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-slate-900">
+                      <h3 className="text-sm font-semibold text-ink-900">
                         Discovered People ({jobStatus.discovered_domains.length})
                       </h3>
                       <SourceBadge domains={jobStatus.discovered_domains} />
@@ -393,12 +393,12 @@ export default function DiscoverLeadsPage() {
                 {!peoplePipeline && jobStatus.discovered_domains.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <Database className="w-4 h-4 text-slate-400" />
-                      <h3 className="text-sm font-semibold text-slate-900">Discovered Domains</h3>
+                      <Database className="w-4 h-4 text-ink-400" />
+                      <h3 className="text-sm font-semibold text-ink-900">Discovered Domains</h3>
                     </div>
-                    <div className="overflow-x-auto border rounded-lg">
+                    <div className="overflow-x-auto border border-ink-100 rounded-lg">
                       <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                        <thead className="text-xs text-ink-500 uppercase bg-ink-50 border-b border-ink-100">
                           <tr>
                             <th className="px-4 py-2 font-medium">Domain</th>
                             <th className="px-4 py-2 font-medium">Company</th>
@@ -406,17 +406,17 @@ export default function DiscoverLeadsPage() {
                             <th className="px-4 py-2 font-medium">Emails</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-ink-50">
                           {jobStatus.discovered_domains.map((d) => (
-                            <tr key={d.id} className="bg-white">
-                              <td className="px-4 py-2 text-slate-900">{d.domain}</td>
-                              <td className="px-4 py-2 text-slate-600">{d.company_name || "�"}</td>
+                            <tr key={d.id} className="bg-surface hover:bg-canvas transition-colors">
+                              <td className="px-4 py-2 text-ink-900">{d.domain}</td>
+                              <td className="px-4 py-2 text-ink-600">{d.company_name || "—"}</td>
                               <td className="px-4 py-2">
                                 <Badge variant={d.status === "crawled" ? "success" : d.status === "failed" ? "destructive" : "secondary"} className="text-xs">
                                   {d.status}
                                 </Badge>
                               </td>
-                              <td className="px-4 py-2 text-slate-600">
+                              <td className="px-4 py-2 text-ink-600">
                                 {d.emails_found ? d.emails_found.split(",").length : 0}
                               </td>
                             </tr>
@@ -430,8 +430,7 @@ export default function DiscoverLeadsPage() {
                 {jobStatus.job.status === "completed" && jobStatus.job.leads_created > 0 && (
                   <div className="flex justify-end pt-2">
                     <Button
-                      variant="default"
-                      className="bg-green-600 hover:bg-green-700"
+                      variant="success"
                       onClick={() => (window.location.href = "/leads")}
                       icon={<ArrowRight className="w-4 h-4" />}
                     >
@@ -449,40 +448,40 @@ export default function DiscoverLeadsPage() {
           <Card className="h-full sticky top-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <History className="w-4 h-4 text-slate-500" />
+                <History className="w-4 h-4 text-ink-400" />
                 Recent Jobs
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {recentJobs.length === 0 ? (
-                <div className="p-6 text-center text-slate-500 text-sm">
+                <div className="p-6 text-center text-ink-400 text-sm">
                   No discovery jobs yet. Start one above!
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-ink-100">
                   {recentJobs.map((job) => (
                     <button
                       key={job.id}
-                      className="w-full text-left p-4 hover:bg-slate-50 transition-colors focus:outline-none"
+                      className="w-full text-left p-4 hover:bg-canvas transition-colors focus:outline-none"
                       onClick={() => handleViewJob(job.id)}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <span className="font-medium text-slate-900 text-sm truncate max-w-[130px]" title={job.keywords}>
+                        <span className="font-medium text-ink-800 text-sm truncate max-w-[130px]" title={job.keywords}>
                           {job.keywords}
                         </span>
-                        <Badge variant={statusVariant(job.status)} className="text-[10px] px-1.5 h-5 capitalize">
+                        <Badge variant={statusVariant(job.status)} size="xs" className="capitalize">
                           {job.status}
                         </Badge>
                       </div>
                       <div className="flex justify-between items-end">
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-ink-500">
                           <div className="flex items-center gap-1 mb-0.5">
                             <Clock className="w-3 h-3" />
                             {new Date(job.created_at).toLocaleDateString()}
                           </div>
                           {job.location && <div className="truncate max-w-[100px]">{job.location}</div>}
                         </div>
-                        <span className="text-xs font-semibold text-green-700">
+                        <span className="text-xs font-semibold text-emerald-700">
                           {job.leads_created} leads
                         </span>
                       </div>

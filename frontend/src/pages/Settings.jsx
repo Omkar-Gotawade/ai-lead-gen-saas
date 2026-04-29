@@ -420,29 +420,29 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 {/* Provider Type Selector */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Provider Type</label>
+                  <label className="block text-xs font-medium text-ink-600 mb-2">Provider Type</label>
                   <div className="flex gap-4">
-                    <label className="flex items-center cursor-pointer">
+                    <label className="flex items-center gap-2 cursor-pointer group">
                       <input
                         type="radio"
                         name="provider_type"
                         value="smtp"
                         checked={providerForm.type === 'smtp'}
                         onChange={(e) => setProviderForm({ ...providerForm, type: e.target.value })}
-                        className="mr-2"
+                        className="text-brand-600 border-ink-300 focus:ring-brand-500"
                       />
-                      <span className="text-sm">SMTP Server</span>
+                      <span className="text-sm font-medium text-ink-700 group-hover:text-ink-900 transition-colors">SMTP Server</span>
                     </label>
-                    <label className="flex items-center cursor-pointer">
+                    <label className="flex items-center gap-2 cursor-pointer group">
                       <input
                         type="radio"
                         name="provider_type"
                         value="sendgrid"
                         checked={providerForm.type === 'sendgrid'}
                         onChange={(e) => setProviderForm({ ...providerForm, type: e.target.value })}
-                        className="mr-2"
+                        className="text-brand-600 border-ink-300 focus:ring-brand-500"
                       />
-                      <span className="text-sm">SendGrid</span>
+                      <span className="text-sm font-medium text-ink-700 group-hover:text-ink-900 transition-colors">SendGrid</span>
                     </label>
                   </div>
                 </div>
@@ -569,9 +569,9 @@ const Settings = () => {
                   required={!aiConfig.has_key}
                 />
 
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                  <h4 className="text-sm font-medium text-slate-900 mb-2">How API Keys Are Used</h4>
-                  <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
+                <div className="bg-ink-50 p-4 rounded-xl border border-ink-100">
+                  <h4 className="text-sm font-semibold text-ink-900 mb-2">How API Keys Are Used</h4>
+                  <ul className="text-sm text-ink-500 space-y-1 list-disc list-inside">
                     <li>Generate personalized email content based on lead information</li>
                     <li>Create follow-up sequences with AI assistance</li>
                     <li>Optimize subject lines and email bodies</li>
