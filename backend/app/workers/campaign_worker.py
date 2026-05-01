@@ -11,6 +11,7 @@ from app.models.sequence_step import SequenceStep
 from app.models.lead import Lead
 from app.workers.email_worker import send_email_task
 from app.services.ai_email_service import generate_email
+from app.services.lead_research_service import research_lead_with_status
 from app.services.audit_logger import AuditLogger
 from app.services.campaign_guard import enforce_campaign_send_limit
 from app.services.spam_check_service import (
@@ -261,11 +262,22 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
         if step.use_ai_generation and step.product_description:
             try:
                 logger.info(f"Generating AI email for lead {lead.id} using tone={step.ai_tone}, goal={step.ai_goal}")
-                
-                # Generate personalized email using AI (run async function in sync context)
+
+                # Research lead first so AI prompt has fresh personalization context.
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
+                    try:
+                        researched_notes, _ = loop.run_until_complete(research_lead_with_status(lead))
+                        if researched_notes:
+                            lead.research_notes = researched_notes
+                            db.commit()
+                            db.refresh(lead)
+                            logger.info("Lead research completed before AI generation for %s", lead.id)
+                    except Exception as exc:
+                        logger.warning("Lead research failed for %s (continuing): %s", lead.id, exc)
+
+                    # Generate personalized email using AI (run async function in sync context)
                     generated = loop.run_until_complete(generate_email(
                         lead=lead,
                         sender_name=sender_name,

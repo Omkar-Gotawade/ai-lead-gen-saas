@@ -1,0 +1,820 @@
+# 📊 App Flow Diagrams
+
+> **Visual representations of all major flows in the application**
+
+---
+
+## 1. Individual Email Sending Flow
+
+```
+┌─────────────────────┐
+│   LEADS PAGE        │
+│                     │
+│ User opens lead     │
+│ Clicks "Send Email" │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────────────────┐
+│   EMAIL COMPOSER MODAL          │
+│                                 │
+│ • Pre-fill with lead name       │
+│ • Allow subject/body editing    │
+│ • Option to generate with AI    │
+│ • User clicks "Send"            │
+└──────────┬──────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│   FRONTEND → API REQUEST             │
+│                                      │
+│ POST /email/send                     │
+│ {                                    │
+│   lead_id: "uuid",                   │
+│   subject: "...",                    │
+│   body: "..."                        │
+│ }                                    │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│   BACKEND CONTROLLER                 │
+│                                      │
+│ 1. Validate request                  │
+│ 2. Fetch lead from database          │
+│ 3. Check rate limits                 │
+│ 4. Enqueue Celery task               │
+│ 5. Return success response           │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│   REDIS QUEUE                        │
+│                                      │
+│ Task: send_email_task                │
+│ Parameters: (user_id, lead_id, ...) │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│   CELERY WORKER                      │
+│                                      │
+│ 1. Pop task from queue               │
+│ 2. Fetch user's email provider       │
+│ 3. Decrypt credentials               │
+│ 4. Connect to provider               │
+│ 5. Send email                        │
+│ 6. Log result to SendingLog table    │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│   EMAIL PROVIDER                     │
+│   (SMTP / SendGrid)                  │
+│                                      │
+│ ✓ Email queued                       │
+│ ✓ Recipient receives email           │
+│ ✓ Provider tracks metrics            │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│   FRONTEND                           │
+│                                      │
+│ Toast: "Email sent successfully"     │
+│ Close modal                          │
+│ Refresh leads list                   │
+└──────────────────────────────────────┘
+```
+
+---
+
+## 2. Campaign Bulk Email Flow
+
+```
+┌──────────────────────────┐
+│   CAMPAIGNS PAGE         │
+│                          │
+│ User clicks             │
+│ "New Campaign"          │
+└──────────┬───────────────┘
+           │
+           ▼
+┌─────────────────────────────────┐
+│   CREATE CAMPAIGN               │
+│                                 │
+│ • Enter name                    │
+│ • Enter description             │
+│ • Create                        │
+│   Status: DRAFT                 │
+└──────────┬─────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────┐
+│   CAMPAIGN EDITOR               │
+│                                 │
+│ • Add sequence steps            │
+│ • Set subject/body for each     │
+│ • Set delay (days)              │
+│ • Save campaign                 │
+└──────────┬─────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────┐
+│   ADD LEADS                     │
+│                                 │
+│ • Select leads                  │
+│ • Add to campaign               │
+│ • Create CampaignLead records   │
+└──────────┬─────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────┐
+│   LAUNCH CAMPAIGN               │
+│                                 │
+│ • Update status: ACTIVE         │
+│ • Enqueue processor task        │
+│ • Start sending                 │
+└──────────┬─────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────┐
+│   CELERY WORKER / BEAT                           │
+│   (check_pending_campaigns → run_sequence_step) │
+│                                                  │
+│ Periodic dispatch (every minute via Celery Beat):
+│                                                  │
+│ 1. `check_pending_campaigns` queries CampaignLead
+│    rows where `status` in (PENDING, IN_PROGRESS)
+│    and `next_run_at <= now()`.
+│ 2. Reserve candidates atomically by setting
+│    `status=QUEUED` and `next_run_at` to a short
+│    reservation window to avoid duplicate dispatch.
+│ 3. For each reserved row, dispatch `run_sequence_step` which:
+│    - If the sequence step uses AI generation, performs fresh lead research first (calls `research_lead_with_status`) to populate `research_notes`.
+│    - Executes AI generation or template rendering, performs spam/quality analysis, enqueues `send_email_task`, and updates the CampaignLead.
+│ 4. If a next step exists, `run_sequence_step` schedules
+│    it with an `eta` computed from the next step's
+│    `delay_days` (i.e., next_run = now + delay_days).
+└──────────┬───────────────────────────────────────┘
+           │
+    ┌──────┴──────┐
+    │             │
+    ▼             ▼
+┌──────────┐  ┌──────────┐
+│ Lead 1   │  │ Lead 2   │
+│ Step 1   │  │ Step 1   │
+│ Day 0    │  │ Day 0    │
+└────┬─────┘  └────┬─────┘
+     │             │
+     ▼             ▼
+┌──────────────────────────┐
+│   SEND EMAIL TASK        │
+│                          │
+│ Queue multiple emails    │
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│   EMAIL PROVIDER         │
+│                          │
+│ • Send all queued emails │
+│ • Track delivery         │
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│   WAIT FOR DELAY         │
+│                          │
+│ 3 days → Send Step 2     │
+│ 7 days → Send Step 3     │
+│ Etc...                   │
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│   MARK COMPLETE          │
+│                          │
+│ CampaignLead.status =    │
+│ "COMPLETED"              │
+└──────────────────────────┘
+```
+
+---
+
+## 3. AI Email Generation Flow
+
+```
+┌─────────────────────────────┐
+│   EMAIL COMPOSER            │
+│                             │
+│ User clicks                 │
+│ "Generate with AI"          │
+└──────────┬──────────────────┘
+           │
+           ▼
+┌──────────────────────────────────┐
+│   FETCH LEAD DATA                │
+│                                  │
+│ • Name                           │
+│ • Company                        │
+│ • Title                          │
+│ • Research notes                 │
+│ • Enriched data (LinkedIn, etc)  │
+└──────────┬───────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────┐
+│   BUILD AI PROMPT                │
+│                                  │
+│ System: "You are expert         │
+│          copywriter..."          │
+│                                  │
+│ Context: Name, company, role     │
+│ Goal: introduce/follow_up/etc    │
+│ Tone: professional/friendly      │
+└──────────┬───────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────┐
+│   CALL OPENROUTER API            │
+│                                  │
+│ POST to openrouter.ai            │
+│ Model: GPT-4 or Claude           │
+│ Temperature: 0.7                 │
+│ Timeout: 30 seconds              │
+└──────────┬───────────────────────┘
+           │
+    ┌──────┴──────────┐
+    │                 │
+    ▼ SUCCESS         ▼ FAILURE
+┌─────────────┐   ┌──────────────┐
+│ Parse       │   │ Fallback     │
+│ response    │   │ template     │
+│ Extract:    │   │              │
+│ • Subject   │   │ Rule-based   │
+│ • Body      │   │ email        │
+│ • Validate  │   │              │
+└──────┬──────┘   └──────┬───────┘
+       │                 │
+       └────────┬────────┘
+                │
+                ▼
+┌──────────────────────────────────┐
+│   RETURN RESPONSE                │
+│                                  │
+│ {                                │
+│   subject: "...",                │
+│   body: "..."                    │
+│ }                                │
+└──────────┬───────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────┐
+│   DISPLAY IN COMPOSER            │
+│                                  │
+│ • Show generated email           │
+│ • Word count                     │
+│ • Edit/Regenerate/Use buttons    │
+│ • User selects "Use"             │
+└──────────────────────────────────┘
+```
+
+---
+
+## 4. Lead Discovery Flow
+
+```
+┌────────────────────────────┐
+│   DISCOVER LEADS PAGE      │
+│                            │
+│ User enters:               │
+│ • Keywords                 │
+│ • Location                 │
+│ • Industry                 │
+│ • Job title                │
+│ • Seniority                │
+│ • Max results (50)         │
+│                            │
+│ Clicks "Start Discovery"   │
+└────────────┬───────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│   CREATE DISCOVERY JOB          │
+│                                 │
+│ LeadDiscoveryJob:               │
+│ • status: "pending"             │
+│ • domains_found: 0              │
+│ • leads_created: 0              │
+│                                 │
+│ Enqueue: run_lead_discovery     │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   PHASE 1: SEARCH DOMAINS        │
+│                                  │
+│ Update status: "searching"       │
+│                                  │
+│ Try in order:                    │
+│ 1. SerpAPI (Google search)       │
+│ 2. ZenRows (Website scraper)     │
+│ 3. Hunter.io API                 │
+│ 4. Apollo.io API                 │
+│ 5. Snov.io API                   │
+│                                  │
+│ Result: List of domains          │
+│ Store in DiscoveredDomain table  │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   PHASE 2: CRAWL WEBSITES        │
+│                                  │
+│ Update status: "crawling"        │
+│                                  │
+│ For each domain:                 │
+│ 1. Visit /about                  │
+│ 2. Visit /team                   │
+│ 3. Visit /contact                │
+│ 4. Visit /careers                │
+│ 5. Extract emails (regex)        │
+│ 6. Extract person names          │
+│                                  │
+│ Update DiscoveredDomain records  │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   PHASE 3: ENRICH DATA           │
+│                                  │
+│ Update status: "enriching"       │
+│                                  │
+│ For each domain with email:      │
+│ 1. Extract person data           │
+│ 2. Create Lead record            │
+│ 3. Set source: "lead_discovery"  │
+│ 4. Save enriched_data (JSON)     │
+│                                  │
+│ Increment: leads_created         │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   UPDATE JOB STATUS              │
+│                                  │
+│ Update:                          │
+│ • status: "completed"            │
+│ • completed_at: now()            │
+│ • leads_created: 42              │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   FRONTEND POLLS                 │
+│   (Every 2 seconds)              │
+│                                  │
+│ GET /api/lead-discovery/{id}     │
+│                                  │
+│ Response:                        │
+│ {                                │
+│   status: "enriching",           │
+│   domains_found: 15,             │
+│   leads_created: 8,              │
+│   discovered_domains: [...]      │
+│ }                                │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   DISPLAY RESULTS                │
+│                                  │
+│ • Progress bar                   │
+│ • Step indicators                │
+│ • Result count                   │
+│ • Person cards (as found)        │
+│ • "Add to Leads" buttons         │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   USER ADDS LEADS                │
+│                                  │
+│ Click "+ Add to Leads"           │
+│ OR                               │
+│ "Add All to Leads"               │
+│                                  │
+│ For each selected:               │
+│ POST /leads                      │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   SAVE TO DATABASE               │
+│                                  │
+│ New Lead records created:        │
+│ • first_name, last_name          │
+│ • email (unique check)           │
+│ • company, title                 │
+│ • source: "lead_discovery"       │
+│ • enriched_data (JSON)           │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────┐
+│   CONFIRMATION                   │
+│                                  │
+│ Toast: "Added 8 new leads"       │
+│ Redirect to Leads page           │
+└──────────────────────────────────┘
+```
+
+---
+
+## 5. Data Flow Through System
+
+```
+                    ┌──────────────────────────────────┐
+                    │      USER BROWSER                │
+                    │                                  │
+                    │  • React Components              │
+                    │  • State Management              │
+                    │  • Local Storage (JWT)           │
+                    └─────────────────┬────────────────┘
+                                      │
+                                      │ HTTP API
+                                      │
+                    ┌─────────────────▼────────────────┐
+                    │      FASTAPI BACKEND             │
+                    │                                  │
+                    │  • Route handlers                │
+                    │  • Request validation            │
+                    │  • Business logic                │
+                    └──────────────┬──────┬────────────┘
+                                   │      │
+                ┌──────────────────┘      └──────────────────┐
+                │                                             │
+                ▼                                             ▼
+    ┌───────────────────────┐                    ┌──────────────────────┐
+    │   POSTGRESQL          │                    │  REDIS + CELERY      │
+    │                       │                    │                      │
+    │ • Users               │                    │ • Job queue          │
+    │ • Leads               │                    │ • Task results       │
+    │ • Campaigns           │                    │ • Cache              │
+    │ • SendingLogs         │                    │ • Rate limits        │
+    │ • Webhooks            │                    │                      │
+    │ • Settings            │                    └──────────┬───────────┘
+    └───────────────────────┘                               │
+                │                                           │
+                │                                  ┌────────▼──────────┐
+                │                                  │  CELERY WORKERS   │
+                │                                  │                   │
+                │                                  │ • Email sender    │
+                │                                  │ • Campaign runner │
+                │                                  │ • Lead discovery  │
+                │                                  │ • Enrichment      │
+                │                                  └────────┬──────────┘
+                │                                           │
+                └─────────────────┬─────────────────────────┘
+                                  │
+                                  ▼
+                    ┌──────────────────────────────────┐
+                    │    EXTERNAL SERVICES             │
+                    │                                  │
+                    │ • OpenRouter API (AI)            │
+                    │ • SendGrid / SMTP (Email)        │
+                    │ • SerpAPI (Search)               │
+                    │ • Hunter.io (Enrichment)         │
+                    │ • Apollo.io (Leads)              │
+                    │ • Snov.io (Leads)                │
+                    │ • LinkedIn API (Enrichment)      │
+                    └──────────────────────────────────┘
+```
+
+---
+
+## 6. Campaign Processing Timeline
+
+```
+Day 0:
+┌────────────────────────────────────────┐
+│ 10:00 AM: Campaign Launched            │
+│ ├─ Status: ACTIVE                      │
+│ ├─ 100 leads added                     │
+│ └─ Celery job enqueued                 │
+└────────────┬───────────────────────────┘
+             │
+             ▼
+         ┌─────────────────────────────────┐
+         │ 10:02 AM: Process Campaign      │
+         │ ├─ For each lead:               │
+         │ │  ├─ Check Step 1 ready? YES   │
+         │ │  ├─ Personalize Step 1 email  │
+         │ │  ├─ Queue send_email_task     │
+         │ │  └─ Update CampaignLead       │
+         │ └─ Process 100 leads → 100 emails
+         └─────────────────────────────────┘
+             │
+             ▼
+         [100 EMAILS SENT TODAY]
+
+
+Day 3:
+┌────────────────────────────────────────┐
+│ 10:00 AM: Process Campaign (hourly)    │
+│ ├─ For each lead:                      │
+│ │  ├─ Check Step 2 ready?              │
+│ │  │  └─ Is now >= (added_date + 3d)   │
+│ │  ├─ If YES:                          │
+│ │  │  ├─ Personalize Step 2 email      │
+│ │  │  ├─ Queue send_email_task         │
+│ │  │  └─ Update CampaignLead           │
+│ │  └─ If NO: Skip                      │
+│ └─ Process all leads                   │
+└────────────────────────────────────────┘
+         │
+         ▼
+    [~100 MORE EMAILS SENT]
+    [~50 OPENS, ~10 CLICKS]
+
+
+Day 7:
+┌────────────────────────────────────────┐
+│ 10:00 AM: Process Campaign (hourly)    │
+│ ├─ For each lead:                      │
+│ │  ├─ Check Step 3 ready?              │
+│ │  │  └─ Is now >= (added_date + 7d)   │
+│ │  ├─ If YES:                          │
+│ │  │  ├─ Personalize Step 3 email      │
+│ │  │  ├─ Queue send_email_task         │
+│ │  │  ├─ Mark CampaignLead COMPLETED   │
+│ │  │  └─ Update CampaignLead           │
+│ │  └─ If NO: Skip                      │
+│ └─ Process all leads                   │
+└────────────────────────────────────────┘
+         │
+         ▼
+    [~100 MORE EMAILS SENT]
+    [~60 OPENS, ~15 CLICKS]
+    [~25 RESPONSES]
+
+
+Day 8+:
+┌────────────────────────────────────────┐
+│ 10:00 AM: Process Campaign (hourly)    │
+│ ├─ All leads now have status:          │
+│ │  └─ COMPLETED (all steps sent)       │
+│ ├─ Campaign processor checks:          │
+│ │  └─ No more work to do               │
+│ └─ Optional: Mark Campaign COMPLETED   │
+└────────────────────────────────────────┘
+
+Campaign Summary:
+─────────────────
+Total emails sent: ~300
+Total opens: ~150 (50%)
+Total clicks: ~35 (11%)
+Total responses: ~25 (8%)
+Campaign duration: 7 days
+Status: COMPLETED
+```
+
+---
+
+## 7. State Transitions
+
+### Campaign Status Flow
+```
+        ┌─────────────────────────────────────┐
+        │ DRAFT (Initial state)               │
+        │ User is setting up campaign         │
+        │ No emails being sent                │
+        └──────────────────┬──────────────────┘
+                           │
+                    Click "Launch"
+                           │
+                           ▼
+        ┌─────────────────────────────────────┐
+        │ ACTIVE (Running)                    │
+        │ Celery workers sending emails       │
+        │ Progress being tracked              │
+        └──────────────┬───────────────────────┘
+                       │                  │
+              Click "Pause"         Finish all steps
+                       │                  │
+                       ▼                  │
+        ┌──────────────────────┐        │
+        │ PAUSED               │        │
+        │ No new emails sent   │        │
+        │ Resume later         │        │
+        └──────────┬───────────┘        │
+                   │                    │
+            Click "Resume"       [automatically]
+                   │                    │
+                   └────────┬───────────┘
+                            ▼
+        ┌─────────────────────────────────────┐
+        │ COMPLETED (Final state)             │
+        │ All steps sent to all leads         │
+        │ Campaign finished                   │
+        └─────────────────────────────────────┘
+```
+
+### Campaign Lead Status Flow
+```
+PENDING → IN_PROGRESS → COMPLETED
+   │           │            │
+   │           │            └─ All steps sent
+   │           │
+   │           └─ Some steps sent
+   │
+   └─ Awaiting first send
+
+Optional error path:
+PENDING / IN_PROGRESS → FAILED
+                          │
+                          └─ Error sending email
+                             (retry 3x)
+                             Then mark failed
+```
+
+---
+
+## 8. Error Handling Flow
+
+```
+┌─────────────────────────┐
+│   API REQUEST           │
+└────────────┬────────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │ Validation?     │
+    └────┬────────────┘
+         │
+    ┌─────┴──────┐
+    │            │
+ FAIL          PASS
+    │            │
+    ▼            ▼
+┌─────────┐  ┌──────────┐
+│ Return  │  │ Database │
+│ 400     │  │ Operation
+└─────────┘  └─────┬────┘
+                   │
+              ┌────┴─────┐
+              │           │
+           FAIL         PASS
+              │           │
+              ▼           ▼
+        ┌──────────┐  ┌──────────┐
+        │ Return   │  │ Celery   │
+        │ 500      │  │ Task     │
+        └──────────┘  └─────┬────┘
+                            │
+                        ┌───┴────┐
+                        │         │
+                     FAIL      PASS
+                        │         │
+                        ▼         ▼
+                  ┌──────────┐ ┌──────────┐
+                  │ Retry    │ │ Success  │
+                  │ 1-3x     │ │ Response │
+                  │ with     │ │ Logged   │
+                  │ backoff  │ │          │
+                  └────┬─────┘ └──────────┘
+                       │
+                    After 3x
+                       │
+                       ▼
+                  ┌──────────┐
+                  │ Log as   │
+                  │ Failed   │
+                  │ Alert    │
+                  │ user     │
+                  └──────────┘
+```
+
+---
+
+## 9. Message Queue Flow
+
+```
+┌──────────────────────────────────────────┐
+│ TASK PRODUCER (FastAPI Backend)          │
+│                                          │
+│ When email needs to be sent:             │
+│ send_email_task.delay(                   │
+│   user_id="uuid",                        │
+│   to_email="recipient@example.com",      │
+│   subject="...",                         │
+│   body="...",                            │
+│   lead_id="uuid"                         │
+│ )                                        │
+└──────────────────┬───────────────────────┘
+                   │
+                   │ Serialize to JSON
+                   │
+                   ▼
+        ┌──────────────────────┐
+        │ REDIS MESSAGE QUEUE  │
+        │                      │
+        │ [Task 1] ─────────┐  │
+        │ [Task 2] ─┐       │  │
+        │ [Task 3] ─┼─────┐ │  │
+        │ [Task 4] ─┼─┐   │ │  │
+        │ ...      ─┼─┼─┐ │ │  │
+        │          └─┼─┼─┼─┼─┘  │
+        │            └─┼─┼─────┘
+        └──────────────┼─┼──────┐
+                       │ │      │
+        ┌──────────────┘ │      │
+        │                │      │
+        ▼                ▼      ▼
+    ┌────────┐      ┌────────┐ ┌────────┐
+    │Worker 1│      │Worker 2│ │Worker 3│
+    │        │      │        │ │        │
+    │Process │      │Process │ │Process │
+    │Task 1  │      │Task 2  │ │Task 3  │
+    └────┬───┘      └───┬────┘ └───┬────┘
+         │              │          │
+         ▼              ▼          ▼
+    ┌────────┐      ┌────────┐ ┌────────┐
+    │ Send   │      │ Send   │ │ Send   │
+    │ Email  │      │ Email  │ │ Email  │
+    │ SMTP   │      │SendGrid│ │ SMTP   │
+    └────┬───┘      └───┬────┘ └───┬────┘
+         │              │          │
+         │              │          │ SUCCESS
+         └──────────┬───┴──────────┘
+                    │
+                    ▼
+         ┌──────────────────────┐
+         │ LOG TO SENDINGLOG    │
+         │                      │
+         │ - email_id           │
+         │ - status: "sent"     │
+         │ - timestamp          │
+         │ - provider used      │
+         └──────────────────────┘
+```
+
+---
+
+## 10. Lead Discovery Priority Matrix
+
+```
+              High Accuracy
+                    │
+                    ▼
+        ┌────────────────────────┐
+   1st  │  Apollo.io API         │  (Best: Structured people data)
+        ├────────────────────────┤
+        │ + Verified emails      │
+        │ + Job title/seniority  │
+        │ + Company info         │
+        │ - More expensive       │
+        └────────────────────────┘
+                    │
+                    ▼
+        ┌────────────────────────┐
+   2nd  │  Snov.io API           │  (Alternative: Similar coverage)
+        ├────────────────────────┤
+        │ + Similar to Apollo    │
+        │ + Good accuracy        │
+        │ - Different pricing    │
+        └────────────────────────┘
+                    │
+                    ▼
+        ┌────────────────────────┐
+   3rd  │  Hunter.io API         │  (Domain-based email search)
+        ├────────────────────────┤
+        │ + Verified domains     │
+        │ + Fast                 │
+        │ - Needs domain first   │
+        └────────────────────────┘
+                    │
+                    ▼
+        ┌────────────────────────┐
+   4th  │  SerpAPI + ZenRows     │  (Web search + scraping)
+        ├────────────────────────┤
+        │ + No API key needed    │
+        │ + Crawls websites      │
+        │ - Lower accuracy       │
+        │ - Slower               │
+        └────────────────────────┘
+                    │
+                    ▼
+        ┌────────────────────────┐
+   5th  │  PDL / Icypeas         │  (Fallback APIs)
+        ├────────────────────────┤
+        │ + Alternative coverage │
+        │ - Varies by provider   │
+        └────────────────────────┘
+              Low Accuracy
+```
+
+---
+
+This visual guide complements the `APP_FLOW_GUIDE.md` with diagrams showing exactly how each component interacts!
