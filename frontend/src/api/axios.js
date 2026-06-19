@@ -25,7 +25,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      localStorage.removeItem('user')
+      // Let React Router's ProtectedRoute handle the redirect to /login
+      // otherwise this disrupts public pages like the Landing Page.
     }
     return Promise.reject(error)
   }

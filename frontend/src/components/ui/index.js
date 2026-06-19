@@ -1,6 +1,7 @@
 export { default as Button }                                              from './Button'
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './Card'
 export { default as Input }                                               from './Input'
+export { default as Select }                                              from './Select'
 export { default as Badge }                                               from './Badge'
 export { Alert, AlertDescription, AlertTitle }                            from './Alert'
 export { default as LoadingSpinner }                                      from './LoadingSpinner'
@@ -9,3 +10,4 @@ export { default as Skeleton, SkeletonText, SkeletonTable, SkeletonTableRow, Ske
 export { default as Toast }                                               from './Toast'
 export { default as ConfirmDialog }                                       from './ConfirmDialog'
 export { default as PasswordInput }                                       from './PasswordInput'
+export { Tabs, TabList, Tab, TabPanel }                                   from './Tabs'

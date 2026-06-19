@@ -10,6 +10,8 @@ import { Eye, EyeOff, Lock } from 'lucide-react'
  *   onChange={(e) => setPassword(e.target.value)}
  *   placeholder="••••••••"
  *   label="Password"
+ *   helperText="Leave blank to keep current password"
+ *   dark  // use on dark glass backgrounds (login/signup)
  * />
  */
 const PasswordInput = React.forwardRef(({
@@ -22,7 +24,8 @@ const PasswordInput = React.forwardRef(({
   autoComplete = 'current-password',
   className = '',
   inputClassName = '',
-  /* dark mode (login page) vs light mode */
+  helperText,
+  /* dark mode (login/signup) vs light mode (settings, forms) */
   dark = false,
 }, ref) => {
   const [visible, setVisible] = useState(false)
@@ -74,6 +77,11 @@ const PasswordInput = React.forwardRef(({
           }
         </button>
       </div>
+      {helperText && (
+        <p className={`mt-1 text-xs ${dark ? 'text-ink-500' : 'text-ink-400'}`}>
+          {helperText}
+        </p>
+      )}
     </div>
   )
 })

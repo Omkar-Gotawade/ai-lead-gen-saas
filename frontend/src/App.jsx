@@ -10,6 +10,7 @@ import Layout from './components/Layout'
 /* ─── Lazy-loaded pages for code splitting ──────────────────── */
 const Login            = lazy(() => import('./pages/Login'))
 const Signup           = lazy(() => import('./pages/Signup'))
+const LandingPage      = lazy(() => import('./pages/LandingPage'))
 const Leads            = lazy(() => import('./pages/Leads'))
 const Campaigns        = lazy(() => import('./pages/Campaigns'))
 const CampaignEditor   = lazy(() => import('./pages/CampaignEditor'))
@@ -35,18 +36,19 @@ function App() {
           <Router>
             <Suspense fallback={<PageFallback />}>
               <Routes>
+                <Route path="/"       element={<LandingPage />} />
                 <Route path="/login"  element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
 
+                {/* Internal App */}
                 <Route
-                  path="/"
+                  path="/*"
                   element={
                     <ProtectedRoute>
                       <Layout />
                     </ProtectedRoute>
                   }
                 >
-                  <Route index element={<Navigate to="/leads" replace />} />
                   <Route path="leads"              element={<Leads />} />
                   <Route path="discover-leads"     element={<DiscoverLeadsPage />} />
                   <Route path="campaigns"          element={<Campaigns />} />
@@ -56,6 +58,9 @@ function App() {
                   <Route path="deliverability"     element={<Deliverability />} />
                   <Route path="pricing"            element={<Pricing />} />
                   <Route path="settings"           element={<Settings />} />
+                  
+                  {/* Catch-all for unknown protected routes */}
+                  <Route path="*" element={<Navigate to="/leads" replace />} />
                 </Route>
               </Routes>
             </Suspense>

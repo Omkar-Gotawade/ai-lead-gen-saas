@@ -21,6 +21,17 @@ const EmptyState = ({
   onAction,
   actionIcon,
 }) => {
+  const renderIcon = (IconOrElement, className) => {
+    if (!IconOrElement) return null
+
+    if (React.isValidElement(IconOrElement)) {
+      const mergedClassName = [IconOrElement.props?.className, className].filter(Boolean).join(' ')
+      return React.cloneElement(IconOrElement, { className: mergedClassName })
+    }
+
+    return React.createElement(IconOrElement, { className })
+  }
+
   const buttons =
     actions.length > 0
       ? actions
@@ -36,7 +47,7 @@ const EmptyState = ({
         <div className="flex justify-center mb-6">
           {icon ? (
             <div className="p-4 rounded-2xl bg-ink-100">
-              {React.cloneElement(icon, { className: 'w-10 h-10 text-ink-400' })}
+              {renderIcon(icon, 'w-10 h-10 text-ink-400')}
             </div>
           ) : (
             <div className="p-4 rounded-2xl bg-ink-100">
@@ -76,7 +87,7 @@ const EmptyState = ({
                 key={idx}
                 variant={action.variant || 'primary'}
                 onClick={action.onClick}
-                icon={action.icon}
+                icon={renderIcon(action.icon, 'w-4 h-4')}
                 disabled={action.disabled}
               >
                 {action.label}
