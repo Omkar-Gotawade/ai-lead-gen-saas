@@ -199,14 +199,14 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+      <div className="bg-surface border border-white/10 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Email Composer</h2>
+            <h2 className="text-2xl font-bold text-white">Email Composer</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-ink-400 hover:text-white transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -216,27 +216,27 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Lead Info */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-gray-900 mb-3">Lead Information</h3>
-              <div className="space-y-2 text-sm">
-                <p><span className="font-medium">Name:</span> {lead.first_name} {lead.last_name}</p>
-                <p><span className="font-medium">Email:</span> {lead.email}</p>
-                {lead.title && <p><span className="font-medium">Title:</span> {lead.title}</p>}
-                {lead.company && <p><span className="font-medium">Company:</span> {lead.company}</p>}
-                {lead.industry && <p><span className="font-medium">Industry:</span> {lead.industry}</p>}
+            <div className="bg-canvas border border-white/5 p-4 rounded-lg">
+              <h3 className="font-semibold text-white mb-3">Lead Information</h3>
+              <div className="space-y-2 text-sm text-ink-300">
+                <p><span className="font-medium text-ink-400">Name:</span> <span className="text-white">{lead.first_name} {lead.last_name}</span></p>
+                <p><span className="font-medium text-ink-400">Email:</span> <span className="text-white">{lead.email}</span></p>
+                {lead.title && <p><span className="font-medium text-ink-400">Title:</span> <span className="text-white">{lead.title}</span></p>}
+                {lead.company && <p><span className="font-medium text-ink-400">Company:</span> <span className="text-white">{lead.company}</span></p>}
+                {lead.industry && <p><span className="font-medium text-ink-400">Industry:</span> <span className="text-white">{lead.industry}</span></p>}
               </div>
             </div>
 
             {/* Generation Options */}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink-300 mb-1">
                   Tone
                 </label>
                 <select
                   value={tone}
                   onChange={(e) => setTone(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-canvas border border-white/10 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
                 >
                   <option value="professional">Professional</option>
                   <option value="friendly">Friendly</option>
@@ -246,7 +246,7 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink-300 mb-1">
                   Goal
                 </label>
                 <input
@@ -254,12 +254,12 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                   value={goal}
                   onChange={(e) => setGoal(e.target.value)}
                   placeholder="e.g., book a demo, get a reply"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-canvas border border-white/10 rounded-md text-white placeholder-ink-600 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink-300 mb-1">
                   Product Description
                 </label>
                 <textarea
@@ -267,18 +267,18 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                   onChange={(e) => setProductDescription(e.target.value)}
                   placeholder="Brief description of your product or service"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-canvas border border-white/10 rounded-md text-white placeholder-ink-600 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
                 />
               </div>
 
               <button
                 onClick={handleGenerate}
                 disabled={loadingGenerate}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-gradient-brand text-black font-semibold py-2 px-4 rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-opacity"
               >
                 {loadingGenerate ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-black" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -293,7 +293,7 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                 <button
                   onClick={handleApplyFixes}
                   disabled={applyingFixes || !body}
-                  className="w-full border border-amber-300 text-amber-800 py-2 px-3 rounded-md hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                  className="w-full border border-amber-500/30 text-amber-500 py-2 px-3 rounded-md hover:bg-amber-500/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transition-colors"
                 >
                   <Wrench className="w-4 h-4" />
                   {applyingFixes ? 'Fixing...' : 'Fix'}
@@ -301,7 +301,7 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                 <button
                   onClick={handleGenerate}
                   disabled={loadingGenerate}
-                  className="w-full border border-blue-300 text-blue-800 py-2 px-3 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                  className="w-full border border-white/10 text-white py-2 px-3 rounded-md hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transition-colors"
                 >
                   <RotateCcw className="w-4 h-4" />
                   Regenerate
@@ -309,19 +309,19 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
               </div>
 
               {checkingSpam && (
-                <p className="text-xs text-slate-500">Running spam check...</p>
+                <p className="text-xs text-ink-400">Running spam check...</p>
               )}
             </div>
           </div>
 
           {/* Error/Success Messages */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-danger/10 border border-danger/30 rounded-md text-danger-light text-sm">
               {error}
             </div>
           )}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm">
+            <div className="mb-4 p-3 bg-success/10 border border-success/30 rounded-md text-success-light text-sm">
               {success}
             </div>
           )}
@@ -336,7 +336,7 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
           {/* Email Preview/Edit */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-ink-300 mb-1">
                 Subject
               </label>
               <input
@@ -344,12 +344,12 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Email subject line"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-canvas border border-white/10 rounded-md text-white placeholder-ink-600 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-ink-300 mb-1">
                 Body
               </label>
               <textarea
@@ -357,7 +357,7 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="Email body text"
                 rows={12}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                className="w-full px-3 py-2 bg-canvas border border-white/10 rounded-md text-white placeholder-ink-600 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm transition-colors"
               />
             </div>
           </div>
@@ -366,21 +366,21 @@ export default function EmailComposer({ lead, onClose, onSend, emailProviderConf
           <div className="flex justify-end space-x-3 mt-6">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 border border-white/10 rounded-md text-ink-300 hover:text-white hover:bg-white/5 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSendTest}
               disabled={loadingSend || !subject || !body}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-success text-white rounded-md hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loadingSend ? 'Sending...' : 'Send Test'}
             </button>
             <button
               onClick={handleSave}
               disabled={!subject || !body}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-white text-black font-semibold rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Save Draft
             </button>

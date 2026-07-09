@@ -16,9 +16,9 @@ export default function SpamScoreCard({ score = 0, level = 'safe' }) {
   const ringColor = level === 'safe' ? '#10b981' : level === 'warning' ? '#f59e0b' : '#ef4444';
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-white/10 bg-canvas p-4">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold text-slate-800">Spam Risk Score</h4>
+        <h4 className="text-sm font-semibold text-white">Spam Risk Score</h4>
         <Badge variant={getLevelBadge(level)} size="xs" className="uppercase tracking-wide">
           {getLevelLabel(level)}
         </Badge>
@@ -28,14 +28,14 @@ export default function SpamScoreCard({ score = 0, level = 'safe' }) {
         <div
           className="relative h-20 w-20 rounded-full"
           style={{
-            background: `conic-gradient(${ringColor} ${clamped}%, #e2e8f0 ${clamped}% 100%)`,
+            background: `conic-gradient(${ringColor} ${clamped}%, #1e2130 ${clamped}% 100%)`,
           }}
         >
-          <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
-            <span className="text-lg font-bold text-slate-900">{clamped}</span>
+          <div className="absolute inset-2 rounded-full bg-surface flex items-center justify-center">
+            <span className="text-lg font-bold text-white">{clamped}</span>
           </div>
         </div>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-ink-400">
           0 is safest. 100 is highest risk.
         </p>
       </div>
