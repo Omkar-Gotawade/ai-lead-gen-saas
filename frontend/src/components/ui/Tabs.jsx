@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useId } from 'react'
+import React, { createContext, useContext, useState } from 'react'
 
 /* ─── Context ────────────────────────────────────────────────── */
 const TabsCtx = createContext(null)
@@ -10,19 +10,6 @@ function useTabsCtx() {
 }
 
 /* ─── Tabs (root) ────────────────────────────────────────────── */
-/**
- * Compound Tabs component following the Context + compound-component pattern.
- *
- * @example
- * <Tabs defaultTab="profile">
- *   <TabList>
- *     <Tab id="profile" icon={User}>Profile</Tab>
- *     <Tab id="security" icon={Shield}>Security</Tab>
- *   </TabList>
- *   <TabPanel id="profile">…content…</TabPanel>
- *   <TabPanel id="security">…content…</TabPanel>
- * </Tabs>
- */
 export function Tabs({ children, defaultTab, onChange, className = '' }) {
   const [active, setActive] = useState(defaultTab)
 
@@ -43,7 +30,8 @@ export function TabList({ children, className = '' }) {
   return (
     <div
       role="tablist"
-      className={`flex space-x-1 border-b border-ink-100 ${className}`}
+      className={`flex space-x-0.5 ${className}`}
+      style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
     >
       {children}
     </div>
@@ -64,12 +52,15 @@ export function Tab({ id, children, icon: Icon, disabled = false }) {
       disabled={disabled}
       onClick={() => setActive(id)}
       className={[
-        'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap',
-        isActive
-          ? 'border-brand-600 text-brand-700'
-          : 'border-transparent text-ink-500 hover:text-ink-800 hover:border-ink-200',
+        'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all duration-150 -mb-px whitespace-nowrap',
         disabled ? 'opacity-40 cursor-not-allowed' : '',
       ].join(' ')}
+      style={isActive
+        ? { borderColor: '#f59e0b', color: '#f59e0b' }
+        : { borderColor: 'transparent', color: '#343a52' }
+      }
+      onMouseEnter={e => { if (!isActive && !disabled) { e.currentTarget.style.color = '#8b8fa8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; } }}
+      onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.borderColor = 'transparent'; } }}
     >
       {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
       {children}

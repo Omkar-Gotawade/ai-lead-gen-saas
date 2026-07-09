@@ -10,36 +10,30 @@ const iconMap = {
 };
 
 const variants = {
-  default:     'bg-info/8    border-info/20    text-blue-800',
-  destructive: 'bg-danger/8  border-danger/20  text-red-800',
-  success:     'bg-success/8 border-success/20 text-emerald-800',
-  warning:     'bg-warning/8 border-warning/20 text-amber-800',
-  info:        'bg-info/8    border-info/20    text-blue-800',
+  default:     { bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.2)',   text: '#93c5fd', iconColor: '#3b82f6'  },
+  destructive: { bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.2)',    text: '#fca5a5', iconColor: '#ef4444'  },
+  success:     { bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.2)',   text: '#6ee7b7', iconColor: '#10b981'  },
+  warning:     { bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.2)',   text: '#fcd34d', iconColor: '#f59e0b'  },
+  info:        { bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.2)',   text: '#93c5fd', iconColor: '#3b82f6'  },
 };
 
-const iconColors = {
-  default:     'text-info',
-  destructive: 'text-danger',
-  success:     'text-success',
-  warning:     'text-warning',
-  info:        'text-info',
-};
-
-const Alert = React.forwardRef(({ className, variant = 'default', children, ...props }, ref) => (
-  <div
-    ref={ref}
-    role="alert"
-    className={`flex gap-3 w-full rounded-xl border px-4 py-3 text-sm ${
-      variants[variant] || variants.default
-    } ${className || ''}`}
-    {...props}
-  >
-    <span className={`mt-0.5 shrink-0 ${iconColors[variant] || iconColors.default}`}>
-      {iconMap[variant] || iconMap.default}
-    </span>
-    <div className="flex-1 min-w-0">{children}</div>
-  </div>
-))
+const Alert = React.forwardRef(({ className, variant = 'default', children, ...props }, ref) => {
+  const v = variants[variant] || variants.default;
+  return (
+    <div
+      ref={ref}
+      role="alert"
+      className={`flex gap-3 w-full rounded-xl border px-4 py-3 text-sm ${className || ''}`}
+      style={{ background: v.bg, borderColor: v.border, color: v.text }}
+      {...props}
+    >
+      <span className="mt-0.5 shrink-0" style={{ color: v.iconColor }}>
+        {iconMap[variant] || iconMap.default}
+      </span>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+})
 Alert.displayName = 'Alert'
 
 const AlertTitle = React.forwardRef(({ className, children, ...props }, ref) => (

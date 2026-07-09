@@ -164,7 +164,7 @@ function Campaigns() {
               />
             </div>
           </CardContent>
-          <CardFooter className="gap-3 border-t border-ink-50 mt-0 pt-4">
+          <CardFooter className="gap-3 mt-0 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <Button
               type="submit"
               size="sm"
@@ -236,9 +236,9 @@ function Campaigns() {
               <tbody>
                 {campaigns.map((campaign) => (
                   <tr key={campaign.id}>
-                    <td className="font-medium text-ink-800">{campaign.name}</td>
-                    <td className="text-ink-500 max-w-xs truncate">
-                      {campaign.description || <span className="text-ink-300">—</span>}
+                    <td className="font-medium" style={{ color: '#e8eaf5' }}>{campaign.name}</td>
+                    <td className="max-w-xs truncate" style={{ color: '#4a5168' }}>
+                      {campaign.description || <span style={{ color: '#252840' }}>—</span>}
                     </td>
                     <td>
                       <Badge
@@ -262,7 +262,6 @@ function Campaigns() {
                           variant="outline"
                           onClick={() => handleToggleStatus(campaign)}
                           icon={<Play className="w-3 h-3" />}
-                          className="border-success/30 text-emerald-700 hover:bg-success/8"
                         >
                           Activate
                         </Button>
@@ -272,15 +271,14 @@ function Campaigns() {
                           variant="outline"
                           onClick={() => handleToggleStatus(campaign)}
                           icon={<Pause className="w-3 h-3" />}
-                          className="border-warning/30 text-amber-700 hover:bg-warning/8"
                         >
                           Pause
                         </Button>
                       ) : (
-                        <span className="text-ink-300 text-xs">—</span>
+                        <span className="text-xs" style={{ color: '#252840' }}>—</span>
                       )}
                     </td>
-                    <td className="text-ink-500 text-xs">
+                    <td className="text-xs" style={{ color: '#4a5168' }}>
                       {new Date(campaign.created_at).toLocaleDateString()}
                     </td>
                     <td className="text-right pr-4">
@@ -289,14 +287,17 @@ function Campaigns() {
                           size="xs"
                           variant="ghost"
                           onClick={() => navigate(`/campaigns/${campaign.id}`)}
-                          className="text-brand-600 hover:bg-brand-50"
+                          style={{ color: '#f59e0b' }}
                         >
                           Edit
                           <ArrowRight className="w-3 h-3 ml-1" />
                         </Button>
                         <button
                           onClick={() => setPendingDelete({ id: campaign.id, name: campaign.name })}
-                          className="p-1.5 rounded-md text-ink-400 hover:text-danger hover:bg-danger/8 transition-colors"
+                          className="p-1.5 rounded-md transition-colors"
+                          style={{ color: '#343a52' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.background = 'transparent'; }}
                           title="Delete"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

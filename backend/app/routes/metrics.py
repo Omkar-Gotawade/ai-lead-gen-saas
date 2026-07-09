@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.sending_log import SendingLog, SendStatus
 from app.models.inbound_event import InboundEvent
 from app.models.lead import Lead
+from app.models.campaign import Campaign
 from app.models.campaign_lead import CampaignLead
 from app.services.auth import get_current_user
 from pydantic import BaseModel
@@ -49,6 +50,27 @@ class TimelineResponse(BaseModel):
     total_sent: int
     total_replies: int
     total_bounces: int
+
+
+class RepliedLeadItem(BaseModel):
+    """Single replied lead row."""
+    campaign_id: str
+    campaign_name: str
+    lead_id: str
+    first_name: str
+    last_name: str
+    email: str
+    company: Optional[str]
+    title: Optional[str]
+    replied_at: datetime
+    reply_message_id: Optional[str]
+    stop_reason: Optional[str]
+
+
+class RepliedLeadsResponse(BaseModel):
+    """Replied leads response."""
+    total: int
+    leads: List[RepliedLeadItem]
 
 
 @router.get("/metrics/org/{org_id}/overview", response_model=MetricsOverview)
@@ -306,3 +328,54 @@ async def get_campaign_stats(
         "completed_leads": completed_leads,
         "reply_rate": round((replied_leads / total_leads * 100) if total_leads > 0 else 0, 2)
     }
+
+
+@router.get("/metrics/org/{org_id}/replied-leads", response_model=RepliedLeadsResponse)
+async def get_replied_leads(
+    org_id: UUID,
+    since: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    until: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    limit: int = Query(25, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return the leads that have replied in the selected period."""
+    if str(current_user.id) != str(org_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not until:
+        until = date.today()
+    if not since:
+        since = until - timedelta(days=30)
+
+    start_dt = datetime.combine(since, datetime.min.time())
+    end_dt = datetime.combine(until, datetime.max.time())
+
+    rows = db.query(CampaignLead, Lead, Campaign).join(
+        Lead, CampaignLead.lead_id == Lead.id
+    ).join(
+        Campaign, CampaignLead.campaign_id == Campaign.id
+    ).filter(
+        Campaign.user_id == org_id,
+        CampaignLead.replied_at.isnot(None),
+        CampaignLead.replied_at >= start_dt,
+        CampaignLead.replied_at <= end_dt,
+    ).order_by(CampaignLead.replied_at.desc()).limit(limit).all()
+
+    leads = []
+    for campaign_lead, lead, campaign in rows:
+        leads.append(RepliedLeadItem(
+            campaign_id=str(campaign.id),
+            campaign_name=campaign.name,
+            lead_id=str(lead.id),
+            first_name=lead.first_name,
+            last_name=lead.last_name,
+            email=lead.email,
+            company=lead.company,
+            title=lead.title,
+            replied_at=campaign_lead.replied_at,
+            reply_message_id=campaign_lead.reply_message_id,
+            stop_reason=campaign_lead.stop_reason,
+        ))
+
+    return RepliedLeadsResponse(total=len(leads), leads=leads)

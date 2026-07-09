@@ -1,9 +1,8 @@
 import React from 'react'
-import { Check, X, Info, DollarSign, Zap } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
+import { Check, X, Info, DollarSign, Zap, ChevronDown } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
 import { Alert, AlertDescription } from '../components/ui/Alert'
 import Button from '../components/ui/Button'
-import Badge from '../components/ui/Badge'
 
 const PLANS = [
   {
@@ -95,22 +94,26 @@ const FAQS = [
 function FAQItem({ q, a }) {
   const [open, setOpen] = React.useState(false)
   return (
-    <Card
-      className="cursor-pointer hover:shadow-card transition-shadow"
+    <div
+      style={{ background: '#111220', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14 }}
+      className="cursor-pointer transition-all duration-200"
       onClick={() => setOpen((o) => !o)}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(245,158,11,0.2)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'}
     >
-      <CardContent className="pt-5 pb-5">
-        <div className="flex items-center justify-between gap-4">
-          <h3 className="font-semibold text-ink-800 text-sm">{q}</h3>
-          <span className={`shrink-0 text-ink-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
-            ▾
-          </span>
+      <div className="flex items-center justify-between gap-4 p-5">
+        <h3 className="font-semibold text-sm" style={{ color: '#e8eaf5' }}>{q}</h3>
+        <ChevronDown
+          className={`shrink-0 w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          style={{ color: '#343a52' }}
+        />
+      </div>
+      {open && (
+        <div className="px-5 pb-5 animate-fade-up">
+          <p className="text-sm leading-relaxed" style={{ color: '#4a5168' }}>{a}</p>
         </div>
-        {open && (
-          <p className="text-ink-500 text-sm mt-3 animate-fade-up">{a}</p>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   )
 }
 
@@ -120,7 +123,7 @@ export default function Pricing() {
       {/* Header */}
       <div className="text-center space-y-3">
         <div className="flex items-center justify-center gap-2 mb-1">
-          <DollarSign className="w-5 h-5 text-brand-600" />
+          <DollarSign className="w-5 h-5" style={{ color: '#f59e0b' }} />
           <h1 className="page-title">Simple, Transparent Pricing</h1>
         </div>
         <p className="page-subtitle">
@@ -128,7 +131,6 @@ export default function Pricing() {
         </p>
 
         <Alert variant="warning" className="max-w-3xl mx-auto text-left">
-          <Info className="h-4 w-4" />
           <AlertDescription>
             <strong>⚠️ Alpha Pricing Notice:</strong> Billing is not active during alpha phase.
             These prices are for evaluation purposes only and subject to change before public launch.
@@ -138,36 +140,48 @@ export default function Pricing() {
       </div>
 
       {/* Pricing cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {PLANS.map((plan, idx) => (
           <div
             key={idx}
-            className={[
-              'relative flex flex-col rounded-2xl border transition-all duration-200',
-              'hover:-translate-y-1',
-              plan.popular
-                ? 'border-2 border-brand-500 shadow-card-lg bg-gradient-to-b from-brand-50/40 to-white hover:shadow-[0_20px_60px_-15px_rgba(124,58,237,0.25)]'
-                : 'border-ink-100 bg-white shadow-card hover:shadow-card-lg',
-            ].join(' ')}
+            className="relative flex flex-col rounded-2xl transition-all duration-200 hover:-translate-y-1"
+            style={{
+              background: plan.popular ? 'rgba(245,158,11,0.06)' : '#111220',
+              border: plan.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.06)',
+              boxShadow: plan.popular ? '0 0 40px rgba(245,158,11,0.1), inset 0 1px 0 rgba(245,158,11,0.15)' : 'none',
+            }}
           >
+            {/* Popular top edge */}
+            {plan.popular && (
+              <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, #f59e0b, transparent)' }} />
+            )}
+
             {plan.badge && (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                <Badge
-                  variant={plan.popular ? 'brand' : 'default'}
-                  className="px-4 py-1 text-xs tracking-wide"
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                <span
+                  className="px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-full whitespace-nowrap"
+                  style={plan.popular
+                    ? { background: 'linear-gradient(135deg,#d97706,#f59e0b)', color: '#07080f' }
+                    : { background: 'rgba(255,255,255,0.06)', color: '#4a5168', border: '1px solid rgba(255,255,255,0.08)' }
+                  }
                 >
                   {plan.badge}
-                </Badge>
+                </span>
               </div>
             )}
 
             <div className="text-center pt-10 pb-4 px-6">
-              <h2 className="text-xl font-bold text-ink-900 mb-1">{plan.name}</h2>
+              <h2 className="text-xl font-bold mb-1" style={{ fontFamily: 'Syne, sans-serif', color: '#f0f2ff' }}>{plan.name}</h2>
               <div className="mb-2">
-                <span className="text-4xl font-extrabold text-ink-900">{plan.price}</span>
-                <span className="text-ink-400 text-sm">{plan.period}</span>
+                <span
+                  className="text-4xl font-medium"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-0.04em', color: plan.popular ? '#f59e0b' : '#e8eaf5' }}
+                >
+                  {plan.price}
+                </span>
+                <span className="text-sm ml-1" style={{ color: '#343a52' }}>{plan.period}</span>
               </div>
-              <p className="text-sm text-ink-500">{plan.description}</p>
+              <p className="text-sm" style={{ color: '#343a52' }}>{plan.description}</p>
             </div>
 
             <div className="flex-1 px-6 pb-6 flex flex-col">
@@ -175,15 +189,11 @@ export default function Pricing() {
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-start gap-2">
                     {feature.included ? (
-                      <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                      <Check className="w-4 h-4 shrink-0 mt-0.5" style={{ color: plan.popular ? '#f59e0b' : '#10b981' }} />
                     ) : (
-                      <X className="w-4 h-4 text-ink-200 shrink-0 mt-0.5" />
+                      <X className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#252840' }} />
                     )}
-                    <span
-                      className={`text-sm ${
-                        feature.included ? 'text-ink-700' : 'text-ink-300'
-                      }`}
-                    >
+                    <span className="text-sm" style={{ color: feature.included ? '#6b7290' : '#252840' }}>
                       {feature.name}
                     </span>
                   </li>
@@ -199,7 +209,7 @@ export default function Pricing() {
               </Button>
 
               {!plan.current && (
-                <p className="text-xs text-center text-ink-400 mt-2">
+                <p className="text-xs text-center mt-2" style={{ color: '#252840' }}>
                   Available after alpha phase
                 </p>
               )}
@@ -210,10 +220,10 @@ export default function Pricing() {
 
       {/* FAQ */}
       <div className="max-w-3xl mx-auto space-y-4">
-        <h2 className="text-lg font-bold text-ink-900 text-center">
+        <h2 className="text-lg font-bold text-center" style={{ fontFamily: 'Syne, sans-serif', color: '#f0f2ff' }}>
           Frequently Asked Questions
         </h2>
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {FAQS.map((faq, i) => (
             <FAQItem key={i} q={faq.q} a={faq.a} />
           ))}
@@ -222,14 +232,24 @@ export default function Pricing() {
 
       {/* Trust banner */}
       <div className="max-w-3xl mx-auto">
-        <div className="bg-gradient-to-r from-brand-50 to-purple-50 border border-brand-100 rounded-2xl px-6 py-6 text-center">
+        <div
+          className="rounded-2xl px-6 py-6 text-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(6,182,212,0.04) 100%)',
+            border: '1px solid rgba(245,158,11,0.2)',
+            boxShadow: '0 0 40px rgba(245,158,11,0.05)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, #f59e0b, transparent)' }} />
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Zap className="w-5 h-5 text-brand-600" />
-            <h3 className="text-base font-bold text-ink-900">🎁 Alpha Tester Benefit</h3>
+            <Zap className="w-5 h-5" style={{ color: '#f59e0b' }} />
+            <h3 className="text-base font-bold" style={{ fontFamily: 'Syne, sans-serif', color: '#f0f2ff' }}>🎁 Alpha Tester Benefit</h3>
           </div>
-          <p className="text-ink-700 text-sm">
+          <p className="text-sm" style={{ color: '#4a5168' }}>
             As an alpha tester, you'll receive a{' '}
-            <strong className="text-brand-700">lifetime 30% discount</strong> on any paid plan when
+            <strong style={{ color: '#f59e0b' }}>lifetime 30% discount</strong> on any paid plan when
             billing launches. Your feedback helps us build a better product!
           </p>
         </div>

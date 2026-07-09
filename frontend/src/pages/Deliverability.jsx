@@ -31,9 +31,9 @@ function ScoreGauge({ score }) {
     'gauge-fill-danger';
 
   const labelColor =
-    score >= 80 ? 'text-green-600' :
-    score >= 60 ? 'text-amber-600' :
-    'text-red-500';
+    score >= 80 ? '#10b981' :
+    score >= 60 ? '#f59e0b' :
+    '#ef4444';
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: 160, height: 160 }}>
@@ -56,8 +56,8 @@ function ScoreGauge({ score }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`text-4xl font-bold tabular-nums ${labelColor}`}>{score}</span>
-        <span className="text-xs text-ink-400 mt-0.5">/ 100</span>
+        <span className="text-4xl font-bold tabular-nums stat-number" style={{ color: labelColor }}>{score}</span>
+        <span className="text-xs mt-0.5" style={{ color: '#343a52' }}>/ 100</span>
       </div>
     </div>
   );
@@ -141,7 +141,7 @@ export default function Deliverability() {
   if (loading) {
     return (
       <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
-        <div className="h-8 w-56 bg-ink-100 rounded animate-pulse" />
+        <div className="h-8 w-56 rounded animate-pulse skeleton" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <SkeletonMetricCard />
           <div className="lg:col-span-2 space-y-6">
@@ -208,21 +208,21 @@ export default function Deliverability() {
             {/* Daily limit bar */}
             <div className="w-full space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-ink-500">Daily Limit Used</span>
-                <span className="font-medium text-ink-900">
+                <span style={{ color: '#4a5168' }}>Daily Limit Used</span>
+                <span className="font-medium stat-number" style={{ color: '#e8eaf5', fontSize: '0.875rem' }}>
                   {healthScore.daily_limit.sent} / {healthScore.daily_limit.limit}
                 </span>
               </div>
-              <div className="w-full bg-ink-100 rounded-full h-2">
+              <div className="w-full rounded-full h-2" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 <div
-                  className="bg-brand-500 h-2 rounded-full transition-all duration-700"
-                  style={{ width: `${pct}%` }}
+                  className="h-2 rounded-full transition-all duration-700"
+                  style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #d97706, #f59e0b)' }}
                 />
               </div>
-              <p className="text-xs text-ink-400 text-center">
+              <p className="text-xs text-center" style={{ color: '#343a52' }}>
                 {healthScore.daily_limit.note || 'Recommended safe limit — Not enforced'}
               </p>
-              <p className="text-xs text-ink-300 text-center">
+              <p className="text-xs text-center" style={{ color: '#252840' }}>
                 Next limit: {healthScore.daily_limit.next_limit} emails/day
               </p>
             </div>
@@ -253,15 +253,21 @@ export default function Deliverability() {
               <CardDescription>Implementation status shown for each check</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y divide-ink-100">
+              <div className="divide-y" style={{ '--tw-divide-opacity': 1 }}>
                 {Object.entries(healthScore.checks).map(([key, check]) => (
-                  <div key={key} className="p-4 hover:bg-ink-50 transition-colors">
+                  <div
+                    key={key}
+                    className="p-4 transition-colors"
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,158,11,0.03)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1">
                         <StatusIcon status={check.status} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <h4 className="text-sm font-medium text-ink-900 capitalize">
+                            <h4 className="text-sm font-medium capitalize" style={{ color: '#e8eaf5' }}>
                               {key.replace(/_/g, ' ')}
                             </h4>
                             {check.implemented === false && (
@@ -270,9 +276,9 @@ export default function Deliverability() {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-ink-500">{check.message}</p>
+                          <p className="text-sm" style={{ color: '#4a5168' }}>{check.message}</p>
                           {check.note && (
-                            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                            <p className="text-xs mt-1 flex items-center gap-1" style={{ color: '#f59e0b' }}>
                               <AlertTriangle className="w-3 h-3 shrink-0" />
                               {check.note}
                             </p>
@@ -307,11 +313,14 @@ export default function Deliverability() {
               </CardHeader>
               <CardContent>
                 {healthScore.warnings?.length > 0 && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl">
-                    <h5 className="text-sm font-semibold text-red-900 mb-2">Warnings</h5>
+                  <div
+                    className="mb-4 p-3 rounded-xl"
+                    style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)' }}
+                  >
+                    <h5 className="text-sm font-semibold mb-2" style={{ color: '#fca5a5' }}>Warnings</h5>
                     <ul className="space-y-1.5">
                       {healthScore.warnings.map((w, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-red-700">
+                        <li key={i} className="flex gap-2 text-sm" style={{ color: '#fca5a5' }}>
                           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                           {w}
                         </li>
@@ -321,8 +330,8 @@ export default function Deliverability() {
                 )}
                 <ul className="space-y-3">
                   {healthScore.recommendations?.map((rec, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-ink-600">
-                      <Info className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" />
+                    <li key={i} className="flex gap-2 text-sm" style={{ color: '#4a5168' }}>
+                      <Info className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
                       {rec}
                     </li>
                   ))}
@@ -345,13 +354,10 @@ export default function Deliverability() {
                   {healthScore.advisory_notices?.map((notice, i) => (
                     <li key={i} className="flex gap-2 text-sm">
                       <div
-                        className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                          notice.type === 'warning' ? 'bg-amber-500' : 'bg-brand-500'
-                        }`}
+                        className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
+                        style={{ background: notice.type === 'warning' ? '#f59e0b' : '#06b6d4' }}
                       />
-                      <span
-                        className={notice.type === 'warning' ? 'text-amber-700' : 'text-ink-600'}
-                      >
+                      <span style={{ color: notice.type === 'warning' ? '#fcd34d' : '#4a5168' }}>
                         {notice.message}
                       </span>
                     </li>

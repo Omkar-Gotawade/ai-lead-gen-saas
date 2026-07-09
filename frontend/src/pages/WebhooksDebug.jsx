@@ -20,6 +20,8 @@ import { SkeletonTable } from '../components/ui/Skeleton';
 
 export default function WebhooksDebug() {
   const [events, setEvents] = useState([]);
+  const [setupStatus, setSetupStatus] = useState(null);
+  const [seeding, setSeeding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [error, setError] = useState(null);
@@ -61,7 +63,29 @@ export default function WebhooksDebug() {
     }
   }, [filter]);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  const fetchSetupStatus = useCallback(async () => {
+    try {
+      const response = await api.get('/api/webhooks/test');
+      setSetupStatus(response.data);
+    } catch {
+      setSetupStatus(null);
+    }
+  }, []);
+
+  const seedSampleEvents = async () => {
+    try {
+      setSeeding(true);
+      await api.post('/api/webhooks/create-sample-events');
+      await fetchEvents();
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+    fetchSetupStatus();
+  }, [fetchEvents, fetchSetupStatus]);
 
   const getEventIcon = (type) => {
     switch (type) {
@@ -114,6 +138,62 @@ export default function WebhooksDebug() {
           Refresh
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-ink-900">Local Webhook Test</h2>
+                <p className="text-sm text-ink-500 mt-0.5">
+                  Localhost cannot receive provider webhooks directly. Use a tunnel like ngrok or Cloudflare Tunnel, then point SendGrid/Gmail to that public URL.
+                </p>
+              </div>
+              <Badge variant={setupStatus ? 'success' : 'secondary'}>
+                {setupStatus ? 'ready' : 'checking'}
+              </Badge>
+            </div>
+            {setupStatus && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-ink-500">
+                <div className="rounded-xl bg-ink-50 p-3">
+                  <div className="text-xs uppercase tracking-wide text-ink-400">SendGrid</div>
+                  <div>{setupStatus.sendgrid_configured ? 'Configured' : 'Not configured'}</div>
+                </div>
+                <div className="rounded-xl bg-ink-50 p-3">
+                  <div className="text-xs uppercase tracking-wide text-ink-400">Gmail</div>
+                  <div>{setupStatus.gmail_configured ? 'Configured' : 'Not configured'}</div>
+                </div>
+                <div className="rounded-xl bg-ink-50 p-3">
+                  <div className="text-xs uppercase tracking-wide text-ink-400">Test status</div>
+                  <div>{setupStatus.message}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchSetupStatus}
+            icon={<RefreshCw className="w-3.5 h-3.5" />}
+          >
+            Check webhook setup
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={seedSampleEvents}
+            isLoading={seeding}
+            icon={<Reply className="w-3.5 h-3.5" />}
+          >
+            Seed sample reply event
+          </Button>
+          <div className="text-xs text-ink-400">
+            Use this to verify the UI while your tunnel or provider setup is still being configured.
+          </div>
+        </CardContent>
+      </Card>
 
       {error && (
         <div className="flex items-start gap-2.5 px-4 py-3 bg-danger/10 border border-danger/20 rounded-xl text-sm text-danger">

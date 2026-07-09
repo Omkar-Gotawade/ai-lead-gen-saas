@@ -4,18 +4,20 @@ const Badge = ({ children, variant = 'default', size = 'sm', dot = false, classN
   const base = 'inline-flex items-center gap-1.5 font-medium rounded-full leading-none';
 
   const variants = {
-    default: 'bg-ink-100 text-ink-700',
-    success: 'bg-success/10 text-emerald-700',
-    warning: 'bg-warning/10 text-amber-700',
-    danger:  'bg-danger/10  text-red-700',
-    info:    'bg-info/10    text-blue-700',
-    brand:   'bg-brand-100  text-brand-700',
-    indigo:  'bg-brand-100  text-brand-700',
-    purple:  'bg-purple-100 text-purple-700',
-    // filled dark variants
-    'success-solid': 'bg-success text-white',
-    'danger-solid':  'bg-danger  text-white',
-    'brand-solid':   'bg-brand-600 text-white',
+    default:       'bg-white/[0.05] text-[#6b7290] border border-white/[0.06]',
+    secondary:     'bg-white/[0.04] text-[#4a5168] border border-white/[0.04]',
+    success:       'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+    warning:       'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+    danger:        'bg-red-500/10 text-red-400 border border-red-500/20',
+    destructive:   'bg-red-500/10 text-red-400 border border-red-500/20',
+    info:          'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+    brand:         'bg-amber-500/12 text-amber-400 border border-amber-500/25',
+    indigo:        'bg-amber-500/12 text-amber-400 border border-amber-500/25',
+    purple:        'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20',
+    // filled solid variants
+    'success-solid': 'bg-emerald-500 text-white',
+    'danger-solid':  'bg-red-500 text-white',
+    'brand-solid':   'bg-amber-500 text-[#07080f] font-semibold',
   };
 
   const sizes = {
@@ -26,18 +28,21 @@ const Badge = ({ children, variant = 'default', size = 'sm', dot = false, classN
   };
 
   const dotColors = {
-    default: 'bg-ink-400',
-    success: 'bg-success',
-    warning: 'bg-warning',
-    danger:  'bg-danger',
-    info:    'bg-info',
-    brand:   'bg-brand-500',
-    indigo:  'bg-brand-500',
+    default:     'bg-[#4a5168]',
+    secondary:   'bg-[#343a52]',
+    success:     'bg-emerald-400',
+    warning:     'bg-amber-400',
+    danger:      'bg-red-400',
+    destructive: 'bg-red-400',
+    info:        'bg-blue-400',
+    brand:       'bg-amber-400',
+    indigo:      'bg-amber-400',
+    purple:      'bg-cyan-400',
   };
 
   return (
     <span className={[base, variants[variant] ?? variants.default, sizes[size] ?? sizes.sm, className].join(' ')}>
-      {dot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColors[variant] || 'bg-ink-400'}`} />}
+      {dot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse-soft ${dotColors[variant] || 'bg-[#4a5168]'}`} />}
       {children}
     </span>
   );

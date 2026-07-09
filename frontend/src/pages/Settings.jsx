@@ -342,11 +342,14 @@ const Settings = () => {
         <TabPanel id="email" className="pt-5">
           <div className="space-y-6">
             {emailProvider && (
-              <div className="flex items-center gap-2.5 px-4 py-3 bg-success/10 border border-success/25 rounded-xl text-sm">
-                <CheckCircle className="h-4 w-4 text-success shrink-0" />
-                <span className="text-ink-700">
+              <div
+                className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm"
+                style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}
+              >
+                <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span style={{ color: '#6ee7b7' }}>
                   Active Provider:{' '}
-                  <strong className="text-ink-900">
+                  <strong style={{ color: '#a7f3d0' }}>
                     {emailProvider.provider_type?.toUpperCase() || 'N/A'}
                   </strong>
                   {emailProvider.smtp_host && ` — ${emailProvider.smtp_host}`}
@@ -381,9 +384,9 @@ const Settings = () => {
                             onChange={(e) =>
                               setProviderForm({ ...providerForm, type: e.target.value })
                             }
-                            className="text-brand-600 border-ink-300 focus:ring-brand-500"
+                            style={{ accentColor: '#f59e0b' }}
                           />
-                          <span className="text-sm font-medium text-ink-700 group-hover:text-ink-900 transition-colors">
+                          <span className="text-sm font-medium transition-colors" style={{ color: '#6b7290' }}>
                             {label}
                           </span>
                         </label>
@@ -510,13 +513,16 @@ const Settings = () => {
         {/* ── AI Configuration ── */}
         <TabPanel id="ai" className="pt-5">
           <div className="space-y-6">
-            <div className="flex items-start gap-3 px-4 py-3 bg-brand-50 border border-brand-100 rounded-xl text-sm">
-              <Brain className="h-4 w-4 text-brand-600 mt-0.5 shrink-0" />
-              <p className="text-ink-600">
-                Configure AI providers for email personalization and content generation. API keys
-                are encrypted and stored securely.
-              </p>
-            </div>
+            <div
+                className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}
+              >
+                <Brain className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
+                <p style={{ color: '#6b7290' }}>
+                  Configure AI providers for email personalization and content generation. API keys
+                  are encrypted and stored securely.
+                </p>
+              </div>
 
             <Card>
               <CardHeader>
@@ -537,11 +543,14 @@ const Settings = () => {
                     }
                     required={!aiConfig.has_key}
                   />
-                  <div className="bg-ink-50 p-4 rounded-xl border border-ink-100">
-                    <h4 className="text-sm font-semibold text-ink-900 mb-2">
+                  <div
+                    className="p-4 rounded-xl"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                  >
+                    <h4 className="text-sm font-semibold mb-2" style={{ color: '#e8eaf5' }}>
                       How API Keys Are Used
                     </h4>
-                    <ul className="text-sm text-ink-500 space-y-1 list-disc list-inside">
+                    <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: '#4a5168' }}>
                       <li>Generate personalized email content based on lead information</li>
                       <li>Create follow-up sequences with AI assistance</li>
                       <li>Optimize subject lines and email bodies</li>

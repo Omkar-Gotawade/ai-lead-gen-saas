@@ -48,6 +48,7 @@ export default function MetricsDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [overview, setOverview] = useState(null);
   const [timeline, setTimeline] = useState(null);
+  const [repliedLeads, setRepliedLeads] = useState([]);
   const [period, setPeriod] = useState('daily');
   const [dateRange, setDateRange] = useState({
     since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -81,6 +82,11 @@ export default function MetricsDashboard() {
         params: { ...dateRange, period }
       });
       setTimeline(timelineRes.data);
+
+      const repliedLeadsRes = await axios.get(`/api/metrics/org/${orgId}/replied-leads`, {
+        params: { ...dateRange, limit: 10 }
+      });
+      setRepliedLeads(repliedLeadsRes.data?.leads || []);
     } catch (err) {
       console.error('Error fetching metrics:', err);
       setError(err.response?.data?.detail || 'Failed to load metrics');
@@ -160,30 +166,30 @@ export default function MetricsDashboard() {
           usePointStyle: true,
           pointStyle: 'circle',
           padding: 16,
-          font: { size: 12, family: 'Inter, sans-serif' },
-          color: '#64748b',
+          font: { size: 12, family: 'DM Sans, sans-serif' },
+          color: '#4a5168',
         },
       },
       title: { display: false },
       tooltip: {
-        backgroundColor: '#0f1117',
-        borderColor: '#1e293b',
+        backgroundColor: '#0a0b0f',
+        borderColor: 'rgba(245,158,11,0.2)',
         borderWidth: 1,
         cornerRadius: 10,
-        titleFont: { size: 12, family: 'Inter, sans-serif' },
-        bodyFont: { size: 12, family: 'Inter, sans-serif' },
+        titleFont: { size: 12, family: 'DM Sans, sans-serif' },
+        bodyFont: { size: 12, family: 'DM Sans, sans-serif' },
         padding: 10,
       },
     },
     scales: {
       y: {
         beginAtZero: true,
-        grid: { color: '#f1f5f9' },
-        ticks: { font: { size: 11, family: 'Inter, sans-serif' }, color: '#94a3b8' },
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { font: { size: 11, family: 'DM Sans, sans-serif' }, color: '#343a52' },
       },
       x: {
         grid: { display: false },
-        ticks: { font: { size: 11, family: 'Inter, sans-serif' }, color: '#94a3b8' },
+        ticks: { font: { size: 11, family: 'DM Sans, sans-serif' }, color: '#343a52' },
       },
     },
   };
@@ -240,31 +246,41 @@ export default function MetricsDashboard() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-end gap-3 bg-surface border border-ink-100 rounded-xl px-4 py-3 shadow-soft">
+        <div
+          className="flex flex-wrap items-end gap-3 rounded-xl px-4 py-3"
+          style={{ background: '#111220', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">From</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: '#343a52' }}>From</label>
             <input
               type="date"
               value={dateRange.since}
               onChange={(e) => setDateRange({ ...dateRange, since: e.target.value })}
-              className="text-sm border border-ink-200 rounded-lg px-3 py-1.5 bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+              className="text-sm rounded-lg px-3 py-1.5 focus:outline-none transition-colors"
+              style={{ background: '#0d0e18', border: '1px solid rgba(255,255,255,0.07)', color: '#c8cce0' }}
+              onFocus={e => e.target.style.borderColor = '#d97706'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">To</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: '#343a52' }}>To</label>
             <input
               type="date"
               value={dateRange.until}
               onChange={(e) => setDateRange({ ...dateRange, until: e.target.value })}
-              className="text-sm border border-ink-200 rounded-lg px-3 py-1.5 bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+              className="text-sm rounded-lg px-3 py-1.5 focus:outline-none transition-colors"
+              style={{ background: '#0d0e18', border: '1px solid rgba(255,255,255,0.07)', color: '#c8cce0' }}
+              onFocus={e => e.target.style.borderColor = '#d97706'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Granularity</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: '#343a52' }}>Granularity</label>
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="text-sm border border-ink-200 rounded-lg px-3 py-1.5 bg-surface text-ink-800 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+              className="text-sm rounded-lg px-3 py-1.5 focus:outline-none transition-colors"
+              style={{ background: '#0d0e18', border: '1px solid rgba(255,255,255,0.07)', color: '#c8cce0' }}
             >
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
@@ -356,16 +372,74 @@ export default function MetricsDashboard() {
           ))}
         </div>
       )}
+
+      {/* Replied leads */}
+      {repliedLeads && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-ink-400" />
+                Replied Leads
+              </span>
+              <Badge variant={repliedLeads.length > 0 ? 'success' : 'secondary'}>
+                {repliedLeads.length} shown
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {repliedLeads.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-ink-200 p-6 text-sm text-ink-500">
+                No replied leads found for this date range. Once webhooks are working, replies will appear here.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Lead</th>
+                      <th>Email</th>
+                      <th>Campaign</th>
+                      <th>Replied At</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {repliedLeads.map((lead) => (
+                      <tr key={`${lead.lead_id}-${lead.reply_message_id || lead.replied_at}`}>
+                        <td className="text-ink-900">
+                          {lead.first_name} {lead.last_name}
+                        </td>
+                        <td className="text-ink-500">{lead.email}</td>
+                        <td className="text-ink-500">
+                          <div className="font-medium text-ink-800">{lead.campaign_name}</div>
+                          {lead.company && <div className="text-xs text-ink-400">{lead.company}</div>}
+                        </td>
+                        <td className="whitespace-nowrap text-ink-400 text-xs">
+                          {new Date(lead.replied_at).toLocaleString()}
+                        </td>
+                        <td>
+                          <Badge variant="success">replied</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
 function MetricCard({ title, value, sub, icon: Icon, accent = 'brand' }) {
   const accentMap = {
-    brand:   { bg: 'bg-brand-50',   icon: 'text-brand-600',   badge: 'bg-brand-100 text-brand-700' },
-    success: { bg: 'bg-success/8',  icon: 'text-emerald-600', badge: 'bg-success/10 text-emerald-700' },
-    purple:  { bg: 'bg-purple-50',  icon: 'text-purple-600',  badge: 'bg-purple-100 text-purple-700' },
-    danger:  { bg: 'bg-danger/8',   icon: 'text-red-600',     badge: 'bg-danger/10 text-red-700' },
+    brand:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.2)',  badgeBg: 'rgba(245,158,11,0.12)', badgeText: '#f59e0b' },
+    success: { color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.2)', badgeBg: 'rgba(16,185,129,0.12)', badgeText: '#10b981' },
+    purple:  { color: '#06b6d4', bg: 'rgba(6,182,212,0.1)',  border: 'rgba(6,182,212,0.2)',  badgeBg: 'rgba(6,182,212,0.12)',  badgeText: '#06b6d4' },
+    danger:  { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',  border: 'rgba(239,68,68,0.2)',  badgeBg: 'rgba(239,68,68,0.12)',  badgeText: '#ef4444' },
   };
   const c = accentMap[accent] || accentMap.brand;
 
@@ -373,14 +447,25 @@ function MetricCard({ title, value, sub, icon: Icon, accent = 'brand' }) {
     <Card>
       <CardContent>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-ink-500 uppercase tracking-wide">{title}</p>
-          <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center`}>
-            <Icon className={`w-4 h-4 ${c.icon}`} />
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#343a52' }}>{title}</p>
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: c.bg, border: `1px solid ${c.border}` }}
+          >
+            <Icon className="w-4 h-4" style={{ color: c.color }} />
           </div>
         </div>
-        <p className="text-3xl font-bold text-ink-900">{typeof value === 'number' ? value.toLocaleString() : '0'}</p>
+        <p
+          className="text-3xl stat-number"
+          style={{ color: '#f0f2ff' }}
+        >
+          {typeof value === 'number' ? value.toLocaleString() : '0'}
+        </p>
         {sub && (
-          <span className={`inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-full ${c.badge}`}>{sub}</span>
+          <span
+            className="inline-flex items-center mt-2 text-xs font-medium px-2 py-0.5 rounded-full"
+            style={{ background: c.badgeBg, color: c.badgeText }}
+          >{sub}</span>
         )}
       </CardContent>
     </Card>

@@ -21,10 +21,10 @@ import {
 const mainNav = [
   { name: 'Leads',          to: '/leads',          icon: Users },
   { name: 'Discover',       to: '/discover-leads', icon: Search },
-  { name: 'Campaigns',      to: '/campaigns',       icon: Mail },
-  { name: 'Analytics',      to: '/metrics',         icon: BarChart2 },
-  { name: 'Deliverability', to: '/deliverability',  icon: ShieldCheck },
-  { name: 'Webhooks',       to: '/webhooks',        icon: Webhook },
+  { name: 'Campaigns',      to: '/campaigns',      icon: Mail },
+  { name: 'Analytics',      to: '/metrics',        icon: BarChart2 },
+  { name: 'Deliverability', to: '/deliverability', icon: ShieldCheck },
+  { name: 'Webhooks',       to: '/webhooks',       icon: Webhook },
 ]
 
 const bottomNav = [
@@ -32,7 +32,6 @@ const bottomNav = [
   { name: 'Pricing',  to: '/pricing',  icon: CreditCard },
 ]
 
-/* Helper: find the display name for the current path */
 const allNav = [...mainNav, ...bottomNav]
 function getPageTitle(pathname) {
   const match = allNav.find(
@@ -48,28 +47,46 @@ function NavItem({ item, isActive, onClick }) {
     <Link
       to={item.to}
       onClick={onClick}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-200 select-none ${
+      className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-200 select-none ${
         isActive
-          ? 'bg-white/10 text-white'
-          : 'text-sidebar-text hover:bg-white/5 hover:text-white'
+          ? 'bg-white/[0.07] text-white'
+          : 'text-sidebar-text hover:bg-white/[0.04] hover:text-white/80'
       }`}
     >
-      {/* Icon with active-state pill */}
+      {/* Active left-rail glow */}
+      {isActive && (
+        <span
+          className="absolute left-0 top-[18%] bottom-[18%] w-[2.5px] rounded-r-full"
+          style={{
+            background: 'linear-gradient(180deg, #fbbf24, #d97706)',
+            boxShadow: '0 0 10px rgba(245,158,11,0.7)',
+          }}
+        />
+      )}
+
+      {/* Icon */}
       <span
         className={`w-6 h-6 shrink-0 flex items-center justify-center rounded-md transition-all duration-200 ${
           isActive
-            ? 'bg-brand-500/25 text-brand-300 scale-105'
-            : 'text-sidebar-muted group-hover:text-white/70'
+            ? 'text-amber-400'
+            : 'text-sidebar-muted group-hover:text-white/60'
         }`}
+        style={isActive ? {
+          background: 'rgba(245,158,11,0.12)',
+          boxShadow: '0 0 8px rgba(245,158,11,0.15)',
+        } : {}}
       >
         <Icon className="w-[15px] h-[15px]" />
       </span>
 
       <span className="truncate flex-1">{item.name}</span>
 
-      {/* Active dot */}
+      {/* Active amber dot */}
       {isActive && (
-        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0 opacity-80" />
+        <span
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ background: '#f59e0b', boxShadow: '0 0 6px rgba(245,158,11,0.8)' }}
+        />
       )}
     </Link>
   )
@@ -94,14 +111,34 @@ function Sidebar({ onClose }) {
   const email = user?.email || ''
 
   return (
-    <aside className="flex flex-col w-60 h-full bg-sidebar-bg border-r border-sidebar-border shadow-sidebar sidebar-scroll overflow-y-auto">
+    <aside
+      className="flex flex-col w-60 h-full sidebar-scroll overflow-y-auto"
+      style={{
+        background: '#0a0b0f',
+        borderRight: '1px solid rgba(255,255,255,0.05)',
+        boxShadow: '4px 0 24px rgba(0,0,0,0.4)',
+      }}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 h-[60px] shrink-0 border-b border-sidebar-border group cursor-default">
-        <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center shadow-md shrink-0 transition-transform duration-200 group-hover:scale-105">
+      <div
+        className="flex items-center gap-2.5 px-4 h-[60px] shrink-0 group cursor-default"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+      >
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
+          style={{
+            background: 'linear-gradient(135deg, #d97706, #f59e0b)',
+            boxShadow: '0 0 0 1px rgba(245,158,11,0.3), 0 4px 12px rgba(217,119,6,0.4)',
+          }}
+        >
           <Zap className="w-4 h-4 text-white" />
         </div>
-        <span className="text-white font-bold text-[15px] tracking-tight">Lead Gen AI</span>
-        {/* Mobile close */}
+        <span
+          className="font-bold text-[15px] tracking-tight text-white"
+          style={{ fontFamily: 'Syne, system-ui, sans-serif' }}
+        >
+          Lead Gen AI
+        </span>
         {onClose && (
           <button
             onClick={onClose}
@@ -132,13 +169,26 @@ function Sidebar({ onClose }) {
       </nav>
 
       {/* User footer */}
-      <div className="px-2 pb-3 shrink-0 border-t border-sidebar-border pt-2">
+      <div
+        className="px-2 pb-3 shrink-0 pt-2"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
+      >
         <div className="relative">
           <button
             onClick={() => setUserMenuOpen((v) => !v)}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-sidebar-hover transition-colors duration-150"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors duration-150"
+            style={{ ':hover': { background: 'rgba(255,255,255,0.04)' } }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+            {/* Avatar with amber ring */}
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, #d97706, #f59e0b)',
+                boxShadow: '0 0 0 2px rgba(245,158,11,0.2)',
+              }}
+            >
               {initials}
             </div>
             <div className="flex-1 text-left min-w-0">
@@ -150,10 +200,17 @@ function Sidebar({ onClose }) {
           {userMenuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#181b2b] border border-sidebar-border rounded-lg shadow-card-lg py-1 z-20 animate-fade-up">
+              <div
+                className="absolute bottom-full left-0 right-0 mb-1 rounded-lg py-1 z-20 animate-fade-up"
+                style={{
+                  background: '#111220',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                }}
+              >
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-white/5 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-white/[0.04] transition-colors"
                 >
                   <LogOut className="w-4 h-4 shrink-0" />
                   Sign out
@@ -174,12 +231,9 @@ const Layout = () => {
   const pageTitle = getPageTitle(location.pathname)
 
   return (
-    <div className="flex h-screen bg-canvas overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: '#0d0e18' }}>
       {/* Accessibility: skip to main content */}
-      <a
-        href="#main-content"
-        className="skip-link"
-      >
+      <a href="#main-content" className="skip-link">
         Skip to content
       </a>
 
@@ -194,7 +248,7 @@ const Layout = () => {
           className="fixed inset-0 z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
         >
-          <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-backdrop" />
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm modal-backdrop" />
         </div>
       )}
       <div
@@ -208,7 +262,13 @@ const Layout = () => {
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Mobile topbar */}
-        <header className="md:hidden flex items-center gap-3 h-14 px-4 bg-sidebar-bg border-b border-sidebar-border shrink-0">
+        <header
+          className="md:hidden flex items-center gap-3 h-14 px-4 shrink-0"
+          style={{
+            background: '#0a0b0f',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+          }}
+        >
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-sidebar-text hover:text-white transition-colors"
@@ -217,17 +277,28 @@ const Layout = () => {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-gradient-brand flex items-center justify-center">
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #d97706, #f59e0b)' }}
+            >
               <Zap className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-white font-semibold text-sm">
+            <span
+              className="text-white font-semibold text-sm"
+              style={{ fontFamily: 'Syne, system-ui, sans-serif' }}
+            >
               {pageTitle || 'Lead Gen AI'}
             </span>
           </div>
         </header>
 
         {/* Page content */}
-        <main id="main-content" className="flex-1 overflow-y-auto" tabIndex={-1}>
+        <main
+          id="main-content"
+          className="flex-1 overflow-y-auto"
+          style={{ background: '#0d0e18' }}
+          tabIndex={-1}
+        >
           <div className="page-enter">
             <Outlet />
           </div>
@@ -238,4 +309,3 @@ const Layout = () => {
 }
 
 export default Layout
-

@@ -140,7 +140,9 @@ const Leads = () => {
         <div>
           <h1 className="page-title">Leads</h1>
           <p className="page-subtitle mt-0.5">
-            {total > 0 ? `${total} contacts in your database` : 'Manage your contacts and prospects'}
+            {total > 0 ? (
+              <><span className="stat-number" style={{ color: '#f59e0b', fontSize: '0.9rem' }}>{total}</span> contacts in your database</>
+            ) : 'Manage your contacts and prospects'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -150,7 +152,6 @@ const Leads = () => {
               size="sm"
               onClick={() => setShowCampaignModal(true)}
               icon={<Users className="w-3.5 h-3.5" />}
-              className="border-success/30 text-emerald-700 hover:bg-success/8"
             >
               Add {selectedLeadIds.length} to Campaign
             </Button>
@@ -182,19 +183,26 @@ const Leads = () => {
 
       {/* Search bar */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: '#343a52' }} />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, email, company…"
-          className="w-full pl-9 pr-8 py-2 text-sm border border-ink-200 rounded-lg bg-surface text-ink-800 placeholder-ink-400
-                     focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+          className="w-full pl-9 pr-8 py-2 text-sm rounded-lg transition-colors focus:outline-none"
+          style={{
+            background: '#111220',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: '#c8cce0',
+          }}
+          onFocus={e => { e.target.style.borderColor = '#d97706'; e.target.style.boxShadow = '0 0 0 3px rgba(245,158,11,0.12)'; }}
+          onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700 transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 transition-colors"
+            style={{ color: '#343a52' }}
             aria-label="Clear search"
           >
             <X className="w-3.5 h-3.5" />
@@ -237,7 +245,7 @@ const Leads = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+              <table className="data-table">
               <thead>
                 <tr>
                   <th className="w-10 px-4 py-3">
@@ -245,7 +253,8 @@ const Leads = () => {
                       type="checkbox"
                       checked={selectedLeadIds.length === filteredLeads.length && filteredLeads.length > 0}
                       onChange={handleSelectAll}
-                      className="w-3.5 h-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                      className="w-3.5 h-3.5 rounded cursor-pointer"
+                      style={{ accentColor: '#f59e0b' }}
                     />
                   </th>
                   <th>Name</th>
@@ -283,20 +292,24 @@ const Leads = () => {
                           type="checkbox"
                           checked={selectedLeadIds.includes(lead.id)}
                           onChange={() => handleSelectLead(lead.id)}
-                          className="w-3.5 h-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                          className="w-3.5 h-3.5 rounded cursor-pointer"
+                          style={{ accentColor: '#f59e0b' }}
                         />
                       </td>
                       <td>
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-xs font-semibold shrink-0">
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                            style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}
+                          >
                             {lead.full_name?.[0]?.toUpperCase() || '?'}
                           </div>
-                          <span className="font-medium text-ink-800">{lead.full_name}</span>
+                          <span className="font-medium" style={{ color: '#e8eaf5' }}>{lead.full_name}</span>
                         </div>
                       </td>
-                      <td className="text-ink-500">{lead.email}</td>
-                      <td className="text-ink-600">{lead.company || <span className="text-ink-300">—</span>}</td>
-                      <td className="text-ink-500 text-xs">{lead.title || <span className="text-ink-300">—</span>}</td>
+                      <td style={{ color: '#6b7290' }}>{lead.email}</td>
+                      <td style={{ color: '#8b8fa8' }}>{lead.company || <span style={{ color: '#252840' }}>—</span>}</td>
+                      <td style={{ color: '#6b7290', fontSize: '0.75rem' }}>{lead.title || <span style={{ color: '#252840' }}>—</span>}</td>
                       <td>
                         <Badge variant="default" size="xs" className="capitalize">
                           {lead.source || 'Manual'}
@@ -309,7 +322,10 @@ const Leads = () => {
                               href={withProtocol(lead.linkedin_url)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 rounded-md text-ink-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              className="p-1.5 rounded-md transition-colors"
+                              style={{ color: '#343a52' }}
+                              onMouseEnter={e => { e.currentTarget.style.color = '#06b6d4'; e.currentTarget.style.background = 'rgba(6,182,212,0.08)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.background = 'transparent'; }}
                               title="View LinkedIn profile"
                             >
                               <Linkedin className="w-3.5 h-3.5" />
@@ -317,7 +333,10 @@ const Leads = () => {
                           )}
                           <button
                             onClick={() => { setSelectedLead(lead); setShowComposer(true); }}
-                            className="p-1.5 rounded-md text-ink-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            className="p-1.5 rounded-md transition-colors"
+                            style={{ color: '#343a52' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#f59e0b'; e.currentTarget.style.background = 'rgba(245,158,11,0.08)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.background = 'transparent'; }}
                             title="Compose Email"
                           >
                             <Mail className="w-3.5 h-3.5" />
@@ -326,24 +345,31 @@ const Leads = () => {
                             onClick={() => handleEnrichLead(lead.id)}
                             disabled={enrichingLeads.has(lead.id)}
                             className={`p-1.5 rounded-md transition-colors ${
-                              enrichingLeads.has(lead.id)
-                                ? 'text-brand-500 animate-pulse-soft'
-                                : 'text-ink-400 hover:text-purple-600 hover:bg-purple-50'
+                              enrichingLeads.has(lead.id) ? 'animate-pulse-soft' : ''
                             }`}
+                            style={{ color: enrichingLeads.has(lead.id) ? '#f59e0b' : '#343a52' }}
+                            onMouseEnter={e => { if (!enrichingLeads.has(lead.id)) { e.currentTarget.style.color = '#f59e0b'; e.currentTarget.style.background = 'rgba(245,158,11,0.08)'; }}}
+                            onMouseLeave={e => { if (!enrichingLeads.has(lead.id)) { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.background = 'transparent'; }}}
                             title="Enrich with AI"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => { setSelectedLead(lead); setShowEditModal(true); }}
-                            className="p-1.5 rounded-md text-ink-400 hover:text-ink-700 hover:bg-ink-100 transition-colors"
+                            className="p-1.5 rounded-md transition-colors"
+                            style={{ color: '#343a52' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#c8cce0'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.background = 'transparent'; }}
                             title="Edit"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => { setSelectedLead(lead); setShowDeleteModal(true); }}
-                            className="p-1.5 rounded-md text-ink-400 hover:text-danger hover:bg-danger/8 transition-colors"
+                            className="p-1.5 rounded-md transition-colors"
+                            style={{ color: '#343a52' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#343a52'; e.currentTarget.style.background = 'transparent'; }}
                             title="Delete"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

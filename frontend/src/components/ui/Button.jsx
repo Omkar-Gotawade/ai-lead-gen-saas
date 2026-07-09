@@ -19,19 +19,19 @@ const Button = React.forwardRef(function Button({
 
   const base = [
     'inline-flex items-center justify-center gap-2 font-semibold rounded-lg',
-    'transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1',
-    'disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] select-none',
+    'transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-canvas',
+    'disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] select-none',
   ].join(' ');
 
   const variants = {
-    primary:     'bg-brand-600 text-white hover:bg-brand-700 shadow-soft focus:ring-brand-500',
-    secondary:   'bg-ink-100 text-ink-700 hover:bg-ink-200 focus:ring-ink-400',
+    primary:     'bg-gradient-brand text-[#07080f] hover:opacity-90 shadow-glow-amber focus:ring-brand-400',
+    secondary:   'bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white border border-white/[0.08] focus:ring-brand-500',
     success:     'bg-success text-white hover:bg-emerald-600 shadow-soft focus:ring-success',
     danger:      'bg-danger text-white hover:bg-red-600 shadow-soft focus:ring-danger',
     destructive: 'bg-danger text-white hover:bg-red-600 shadow-soft focus:ring-danger',
-    ghost:       'text-ink-600 hover:bg-ink-100 focus:ring-ink-400',
-    outline:     'bg-surface text-ink-700 border border-ink-200 hover:bg-canvas focus:ring-brand-400',
-    link:        'text-brand-600 hover:text-brand-700 hover:underline focus:ring-brand-400 px-0 py-0',
+    ghost:       'text-white/50 hover:bg-white/[0.05] hover:text-white/80 focus:ring-brand-400',
+    outline:     'bg-transparent text-white/60 border border-white/[0.1] hover:bg-white/[0.05] hover:text-white hover:border-white/[0.15] focus:ring-brand-400',
+    link:        'text-brand-400 hover:text-brand-300 hover:underline focus:ring-brand-400 px-0 py-0',
   };
 
   const sizes = {

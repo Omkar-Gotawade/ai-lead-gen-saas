@@ -10,6 +10,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models.inbound_event import InboundEvent
+from app.models.campaign import Campaign
 from app.models.lead import Lead
 from app.models.campaign_lead import CampaignLead, CampaignLeadStatus
 from app.models.sending_log import SendingLog, SendStatus
@@ -419,6 +420,27 @@ async def create_sample_events(db: Session = Depends(get_db)):
     try:
         # Use default org ID from settings
         default_org_id = settings.DEFAULT_ORG_ID
+
+        sample_campaign_lead = db.query(CampaignLead, Lead).join(
+            Lead, CampaignLead.lead_id == Lead.id
+        ).filter(
+            Lead.org_id == default_org_id
+        ).first()
+
+        reply_seed = None
+        if sample_campaign_lead:
+            campaign_lead, lead = sample_campaign_lead
+            reply_seed = {
+                "event_type": "reply",
+                "provider": "sendgrid",
+                "parsed_from": lead.email,
+                "parsed_to": "sales@yourdomain.com",
+                "parsed_subject": f"Re: {lead.first_name} follow-up",
+                "parsed_message_id": "test-reply-001",
+                "parsed_in_reply_to": "test-msg-002",
+                "lead_id": str(lead.id),
+                "campaign_lead_id": str(campaign_lead.id),
+            }
         
         sample_events = [
             {
@@ -462,6 +484,9 @@ async def create_sample_events(db: Session = Depends(get_db)):
                 "parsed_message_id": "test-msg-003",
             },
         ]
+
+        if reply_seed:
+            sample_events.append(reply_seed)
         
         created_events = []
         for event_data in sample_events:
@@ -479,6 +504,13 @@ async def create_sample_events(db: Session = Depends(get_db)):
             )
             db.add(event)
             created_events.append(event_data)
+
+            if event_data["event_type"] == "reply" and sample_campaign_lead:
+                campaign_lead, lead = sample_campaign_lead
+                campaign_lead.replied_at = datetime.utcnow()
+                campaign_lead.reply_message_id = event_data["parsed_message_id"]
+                campaign_lead.stop_reason = "reply_received"
+                campaign_lead.status = CampaignLeadStatus.STOPPED.value
         
         db.commit()
         

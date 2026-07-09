@@ -1,19 +1,6 @@
 import React, { useState } from 'react'
 import { Eye, EyeOff, Lock } from 'lucide-react'
 
-/**
- * Password input with show/hide toggle.
- *
- * @example
- * <PasswordInput
- *   value={password}
- *   onChange={(e) => setPassword(e.target.value)}
- *   placeholder="••••••••"
- *   label="Password"
- *   helperText="Leave blank to keep current password"
- *   dark  // use on dark glass backgrounds (login/signup)
- * />
- */
 const PasswordInput = React.forwardRef(({
   value,
   onChange,
@@ -25,34 +12,21 @@ const PasswordInput = React.forwardRef(({
   className = '',
   inputClassName = '',
   helperText,
-  /* dark mode (login/signup) vs light mode (settings, forms) */
-  dark = false,
+  dark = false, // kept for API compatibility — all variants now use dark
 }, ref) => {
   const [visible, setVisible] = useState(false)
-
-  const baseInput = dark
-    ? 'w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-10 py-2.5 text-sm text-white placeholder-ink-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors'
-    : 'w-full bg-surface border border-ink-200 rounded-lg pl-9 pr-10 py-2.5 text-sm text-ink-900 placeholder-ink-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors'
-
-  const labelClass = dark
-    ? 'text-xs font-medium text-ink-300 mb-1.5 block'
-    : 'text-xs font-medium text-ink-600 mb-1.5 block'
-
-  const iconColor = dark ? 'text-ink-500' : 'text-ink-400'
-  const toggleColor = dark
-    ? 'text-ink-500 hover:text-ink-300'
-    : 'text-ink-400 hover:text-ink-600'
 
   return (
     <div className={className}>
       {label && (
-        <label htmlFor={id} className={labelClass}>
+        <label htmlFor={id} className="text-xs font-medium mb-1.5 block" style={{ color: '#4a5168' }}>
           {label}
         </label>
       )}
       <div className="relative">
         <Lock
-          className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${iconColor}`}
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+          style={{ color: '#343a52' }}
         />
         <input
           ref={ref}
@@ -63,22 +37,29 @@ const PasswordInput = React.forwardRef(({
           required={required}
           autoComplete={autoComplete}
           placeholder={placeholder}
-          className={[baseInput, inputClassName].join(' ')}
+          className={['w-full rounded-lg pl-9 pr-10 py-2 text-sm focus:outline-none focus:ring-2 transition-colors', inputClassName].join(' ')}
+          style={{
+            background: '#111220',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: '#c8cce0',
+          }}
+          onFocus={e => { e.target.style.borderColor = '#d97706'; e.target.style.boxShadow = '0 0 0 3px rgba(245,158,11,0.12)'; }}
+          onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
         />
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? 'Hide password' : 'Show password'}
-          className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-500 rounded ${toggleColor}`}
+          className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors focus:outline-none rounded"
+          style={{ color: '#343a52' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#8b8fa8'}
+          onMouseLeave={e => e.currentTarget.style.color = '#343a52'}
         >
-          {visible
-            ? <EyeOff className="w-4 h-4" />
-            : <Eye className="w-4 h-4" />
-          }
+          {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
       </div>
       {helperText && (
-        <p className={`mt-1 text-xs ${dark ? 'text-ink-500' : 'text-ink-400'}`}>
+        <p className="mt-1 text-xs" style={{ color: '#343a52' }}>
           {helperText}
         </p>
       )}
