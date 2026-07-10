@@ -170,6 +170,12 @@ async def generate_email_endpoint(
             body=generated.body,
             research_notes=research_notes_used,
             research_status=research_status,
+            # A/B metadata from Human SDR Copywriter Agent
+            email_angle=generated.email_angle,
+            word_count=generated.word_count,
+            selected_subject=generated.selected_subject,
+            alternative_subjects=generated.alternative_subjects,
+            quality_report=generated.quality_report,
         )
         
     except ValueError as e:

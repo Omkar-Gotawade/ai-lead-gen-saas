@@ -1,6 +1,6 @@
 """Email-related Pydantic schemas."""
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 
@@ -13,11 +13,17 @@ class EmailGenerateRequest(BaseModel):
 
 
 class EmailGenerateResponse(BaseModel):
-    """Generated email response."""
+    """Generated email response with Human SDR Copywriter Agent metadata."""
     subject: str
     body: str
     research_notes: Optional[str] = None
     research_status: Optional[str] = None
+    # A/B test metadata from Human SDR Copywriter Agent
+    email_angle: Optional[str] = None                  # pain_point|curiosity|question|case_study|direct
+    word_count: Optional[int] = None
+    selected_subject: Optional[str] = None
+    alternative_subjects: Optional[List[str]] = None
+    quality_report: Optional[Dict[str, Any]] = None
 
 
 class EmailSendRequest(BaseModel):

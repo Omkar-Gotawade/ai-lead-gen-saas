@@ -26,6 +26,10 @@ class SendingLog(Base):
     # Deduplication tracking
     message_id = Column(String, nullable=True, index=True, unique=True)
 
+    # Threading: campaign context for thread-anchor lookups
+    campaign_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    step_index = Column(Integer, nullable=True)
+
     provider_type = Column(String, nullable=False)
     to_email = Column(String, nullable=False)
     subject = Column(String, nullable=False)
@@ -37,3 +41,4 @@ class SendingLog(Base):
     sent_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+

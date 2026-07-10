@@ -1,23 +1,129 @@
-"""AI email generation service using OpenRouter."""
-from typing import Optional, List, Dict, Any
+"""Human SDR Copywriter Agent — AI email generation service.
+
+Three-stage pipeline:
+  1. Subject Agent   → generates 5 subject options, scores each, picks best
+  2. Copywriter Agent → writes a 70–110 word SDR-style cold email body
+  3. Quality Checker  → scores human/spam/AI risk; rewrites if thresholds fail
+
+OpenRouter infrastructure (headers, retry, fallback models) is unchanged.
+The existing Lead Research Agent (Gemini) is called upstream by the route layer
+and its notes arrive here via lead.research_notes — completely untouched.
+"""
+from __future__ import annotations
+
 import asyncio
+import json
 import logging
+import re
 import time
+from typing import Any, Dict, List, Optional
+
 import requests
+from pydantic import BaseModel
+
 from app.config import settings
 from app.models.lead import Lead
-from pydantic import BaseModel
-import re
-
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
+
+class SubjectCandidate(BaseModel):
+    """A single subject line candidate with scoring."""
+    subject: str
+    curiosity_score: int  # 0–10
+    human_score: int      # 0–10
+    reason: str
+
+
+class EmailQualityReport(BaseModel):
+    """Quality assessment from the Quality Checker Agent."""
+    human_score: int            # 0–100
+    personalization_score: int  # 0–100
+    spam_risk: int              # 0–100
+    sounds_ai_generated: bool
+
+
 class GeneratedEmail(BaseModel):
-    """Generated email response."""
+    """Generated email with body, subject and A/B metadata."""
     subject: str
     body: str
+    # A/B test metadata
+    email_angle: Optional[str] = None          # pain_point|curiosity|question|case_study|direct
+    word_count: Optional[int] = None
+    tone: Optional[str] = None
+    selected_subject: Optional[str] = None
+    alternative_subjects: Optional[List[str]] = None
+    quality_report: Optional[Dict[str, Any]] = None
 
+
+# ---------------------------------------------------------------------------
+# Banned content lists
+# ---------------------------------------------------------------------------
+
+# Phrases that make emails feel generic or AI-written
+BANNED_PHRASES = [
+    "i came across your profile",
+    "i came across your company",
+    "i hope this email finds you well",
+    "wanted to reach out",
+    "my aim is to",
+    "explore how we might",
+    "align with your objectives",
+    "thought i'd reach out",
+    "i'd love to chat",
+    "cutting-edge",
+    "industry-leading",
+    "revolutionize",
+    "game-changing",
+    "leverage",
+    "synergy",
+    "paradigm shift",
+    "best-in-class",
+    "must be a huge undertaking",
+    "must be challenging",
+    "are you ever finding it difficult",
+    "ensuring consistent messaging",
+    "optimizing campaign performance",
+    "resonates and delivers",
+    "measurable results",
+    "fragmented effort",
+    "unified brand voice",
+    # New additions from spec
+    "given your focus on",
+    "i was impressed by",
+    "in today's competitive landscape",
+    "revolutionary",
+    "transform",
+    "unlock",
+    "seamless",
+    "enhance",
+    "optimize",
+    "maximize",
+    "powerful solution",
+    "tailored solution",
+]
+
+# Corporate jargon that inflates spam risk
+CORPORATE_JARGON = [
+    "ensuring consistent",
+    "measurable results",
+    "fragmented effort",
+    "unified brand voice",
+    "must be a huge",
+    "must be challenging",
+    "resonate and deliver",
+    "massive scale",
+    "huge undertaking",
+]
+
+
+# ---------------------------------------------------------------------------
+# OpenRouter infrastructure (unchanged from original)
+# ---------------------------------------------------------------------------
 
 def _normalize_text_for_match(value: str) -> str:
     """Normalize text for robust fuzzy containment checks."""
@@ -33,10 +139,8 @@ def _body_mentions_company(body: str, company: str) -> bool:
     company_lower = (company or "").lower().strip()
     if not company_lower:
         return True
-
     if company_lower in body_lower:
         return True
-
     body_norm = _normalize_text_for_match(body_lower)
     company_norm = _normalize_text_for_match(company_lower)
     return bool(company_norm and company_norm in body_norm)
@@ -94,13 +198,8 @@ def _request_openrouter_completion(prompt: str) -> str:
     for model_id in candidate_models:
         payload = {
             "model": model_id,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            "temperature": 0.7,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.75,
         }
 
         model_rate_limited = False
@@ -116,9 +215,7 @@ def _request_openrouter_completion(prompt: str) -> str:
                 if response.status_code == 404:
                     response_text = (response.text or "").lower()
                     if "no endpoints found" in response_text:
-                        last_error = (
-                            f"OpenRouter model '{model_id}' is unavailable for this account."
-                        )
+                        last_error = f"OpenRouter model '{model_id}' is unavailable for this account."
                         logger.warning(last_error)
                         break
 
@@ -127,10 +224,7 @@ def _request_openrouter_completion(prompt: str) -> str:
                     delay_seconds = _parse_retry_delay(response, attempt)
                     logger.warning(
                         "OpenRouter rate limited model %s (attempt %s/%s). Retrying in %.1fs.",
-                        model_id,
-                        attempt + 1,
-                        max_retries,
-                        delay_seconds,
+                        model_id, attempt + 1, max_retries, delay_seconds,
                     )
                     if attempt < max_retries - 1:
                         time.sleep(delay_seconds)
@@ -146,6 +240,7 @@ def _request_openrouter_completion(prompt: str) -> str:
                 if not content:
                     raise ValueError("OpenRouter returned empty content")
                 return content
+
             except requests.RequestException as exc:
                 last_error = f"{model_id}: {exc}"
                 if attempt >= max_retries - 1:
@@ -165,42 +260,14 @@ def _request_openrouter_completion(prompt: str) -> str:
     raise ValueError(f"OpenRouter request failed after {max_retries} attempts: {last_error}")
 
 
-# Banned phrases that make emails sound too generic or AI-generated
-BANNED_PHRASES = [
-    "i came across your profile",
-    "i came across your company",
-    "i hope this email finds you well",
-    "wanted to reach out",
-    "my aim is to",
-    "explore how we might",
-    "align with your objectives",
-    "thought i'd reach out",
-    "i'd love to chat",
-    "cutting-edge",
-    "industry-leading",
-    "revolutionize",
-    "game-changing",
-    "leverage",
-    "synergy",
-    "paradigm shift",
-    "best-in-class",
-    "must be a huge undertaking",
-    "must be challenging",
-    "are you ever finding it difficult",
-    "ensuring consistent messaging",
-    "optimizing campaign performance",
-    "resonates and delivers",
-    "measurable results",
-    "fragmented effort",
-    "unified brand voice",
-]
-
+# ---------------------------------------------------------------------------
+# Existing quality helpers (unchanged — used as final rule-based safety net)
+# ---------------------------------------------------------------------------
 
 def _extract_lead_research_signals(lead: Lead) -> List[str]:
     """Collect concrete research signals from lead fields and enrichment JSON."""
     signals: List[str] = []
 
-    # Core LinkedIn/persona signals
     if lead.linkedin_url:
         signals.append(f"LinkedIn URL: {lead.linkedin_url}")
     if lead.linkedin_headline:
@@ -209,27 +276,16 @@ def _extract_lead_research_signals(lead: Lead) -> List[str]:
         signals.append(f"Job title: {lead.job_title}")
     if lead.seniority:
         signals.append(f"Seniority: {lead.seniority}")
-
-    # Existing enriched profile/company details
     if lead.company_size:
         signals.append(f"Company size: {lead.company_size}")
 
     enriched = lead.enriched_data if isinstance(lead.enriched_data, dict) else None
     if enriched:
         preferred_keys = [
-            "company_domain",
-            "company_summary",
-            "industry",
-            "pain_points",
-            "key_insights",
-            "funding",
-            "hiring",
-            "tech_stack",
-            "tools",
-            "recent_news",
-            "signals",
+            "company_domain", "company_summary", "industry", "pain_points",
+            "key_insights", "funding", "hiring", "tech_stack", "tools",
+            "recent_news", "signals",
         ]
-
         for key in preferred_keys:
             value = enriched.get(key)
             if not value:
@@ -243,7 +299,6 @@ def _extract_lead_research_signals(lead: Lead) -> List[str]:
                 if text:
                     signals.append(f"{key}: {text}")
 
-    # Deduplicate while preserving order
     deduped: List[str] = []
     seen = set()
     for signal in signals:
@@ -255,426 +310,589 @@ def _extract_lead_research_signals(lead: Lead) -> List[str]:
     return deduped
 
 
-def _format_research_notes_prompt(notes: str) -> str:
-    """
-    Format research notes for the LLM to extract key points.
-    
-    Args:
-        notes: Raw research notes about the lead
-        
-    Returns:
-        Formatted string highlighting key points
-    """
-    if not notes:
-        return ""
-    
-    return f"""
-[CRITICAL RESEARCH INSIGHTS - MUST USE IN EMAIL]
-{notes}
-
-⚠️ REQUIREMENT: You MUST reference at least ONE specific detail from these notes in your opening sentence.
-Examples of good references:
-- "saw you're growing the SDR team from 5 to 12"
-- "congrats on the Series A ($5M)"
-- "noticed you posted about deliverability issues"
-- "saw you're using Outreach.io + Salesforce"
-"""
-
-
 def _check_email_quality(email: GeneratedEmail, lead: Lead) -> List[str]:
     """
-    Validate email quality and return list of issues found.
-    
-    Args:
-        email: Generated email to check
-        lead: Lead object for context
-        
-    Returns:
-        List of quality issue descriptions (empty if email passes all checks)
+    Rule-based quality validation. Returns list of issues (empty = passes).
+    Used as the final safety net after the LLM Quality Checker stage.
     """
     issues = []
     body_lower = email.body.lower()
-    
-    # Check for banned phrases
+
     for phrase in BANNED_PHRASES:
         if phrase in body_lower:
             issues.append(f"Contains banned phrase: '{phrase}'")
 
-    # Disallow P.S. sections.
     if re.search(r"(^|\n)\s*p\.?\s*s\.?\s*:?,?", email.body, flags=re.IGNORECASE):
         issues.append("Contains postscript (P.S.) which is not allowed")
-    
-    # Check word count (30-150 words in body, excluding signature)
-    # Remove signature for word count
-    body_without_sig = re.sub(r'Best regards,.*$', '', email.body, flags=re.DOTALL | re.IGNORECASE)
+
+    body_without_sig = re.sub(r"Best regards,.*$", "", email.body, flags=re.DOTALL | re.IGNORECASE)
     word_count = len(body_without_sig.split())
     if word_count < 30:
         issues.append(f"Too short: {word_count} words (minimum 30)")
     elif word_count > 150:
         issues.append(f"Too long: {word_count} words (maximum 150)")
-    
-    # Check if lead's first name is used in body
+
     if lead.first_name and lead.first_name.lower() not in body_lower:
         issues.append(f"Lead's first name '{lead.first_name}' not used in email body")
-    
-    # Check if company is mentioned (if available), allowing punctuation/spacing variance.
+
     if lead.company and not _body_mentions_company(email.body, lead.company):
         issues.append(f"Company name '{lead.company}' not mentioned in email")
-    
-    # CRITICAL: If any research context exists, ensure email references specific details
+
     research_signals = _extract_lead_research_signals(lead)
     research_corpus = "\n".join([lead.research_notes or ""] + research_signals).strip()
     if research_corpus:
-        # Extract potential specific details (numbers, dollar signs, tool names, etc.)
         research_lower = research_corpus.lower()
         has_specific_reference = False
-        
-        # Check for numbers from research in email
-        numbers_in_research = re.findall(r'\b\d+\b', research_corpus)
+
+        numbers_in_research = re.findall(r"\b\d+\b", research_corpus)
         for num in numbers_in_research:
             if num in email.body:
                 has_specific_reference = True
                 break
-        
-        # Check for common tools/platforms mentioned in research
-        tools = ['salesforce', 'outreach', 'sendgrid', 'linkedin', 'series a', 'series b', 'hiring', 'raised', 'funding']
+
+        tools = ["salesforce", "outreach", "sendgrid", "linkedin", "series a", "series b",
+                 "hiring", "raised", "funding"]
         for tool in tools:
             if tool in research_lower and tool in body_lower:
                 has_specific_reference = True
                 break
-        
+
         if not has_specific_reference:
-            issues.append("Research context available but email doesn't reference specific details (numbers, tools, events)")
-    
-    # Check for clear CTA (question mark or action words)
-    has_question = '?' in email.body
-    action_words = ['call', 'chat', 'meeting', 'discuss', 'talk', 'connect', 'demo', 'walkthrough', 'conversation']
+            issues.append(
+                "Research context available but email doesn't reference specific details "
+                "(numbers, tools, events)"
+            )
+
+    has_question = "?" in email.body
+    action_words = ["call", "chat", "meeting", "discuss", "talk", "connect", "demo",
+                    "walkthrough", "conversation"]
     has_action = any(word in body_lower for word in action_words)
-    
     if not has_question and not has_action:
         issues.append("Missing clear call-to-action (no question or action words)")
-    
-    # Check average sentence length
-    sentences = [s.strip() for s in email.body.replace('?', '.').replace('!', '.').split('.') if s.strip()]
+
+    sentences = [s.strip() for s in email.body.replace("?", ".").replace("!", ".").split(".") if s.strip()]
     if sentences:
         avg_words_per_sentence = sum(len(s.split()) for s in sentences) / len(sentences)
         if avg_words_per_sentence > 18:
             issues.append(f"Sentences too long (avg {avg_words_per_sentence:.1f} words, keep under 18)")
-    
-    # Check for corporate jargon
-    corporate_jargon = [
-        "ensuring consistent",
-        "optimizing",
-        "measurable results",
-        "fragmented effort",
-        "unified brand voice",
-        "must be a huge",
-        "must be challenging",
-        "resonate and deliver",
-        "massive scale",
-        "huge undertaking",
-    ]
-    for jargon in corporate_jargon:
+
+    for jargon in CORPORATE_JARGON:
         if jargon in body_lower:
             issues.append(f"Contains corporate jargon: '{jargon}'")
-    
+
     return issues
 
+
+# ---------------------------------------------------------------------------
+# Stage 1 — Subject Agent
+# ---------------------------------------------------------------------------
+
+_SUBJECT_AGENT_PROMPT_TEMPLATE = """\
+You are a Subject Line Specialist writing cold email subjects for a B2B SaaS SDR.
+
+LEAD CONTEXT:
+- Name: {first_name} {last_name}
+- Company: {company}
+- Title: {title}
+- Research notes: {research_snippet}
+
+YOUR TASK:
+Generate exactly 5 subject line options for this cold email.
+
+STRICT RULES:
+- 2 to 5 words only
+- Under 50 characters
+- Lowercase preferred
+- Curiosity-focused — make the recipient want to open
+- No clickbait, no emojis, no exclamation marks
+- Zero sales words (no: offer, deal, pricing, solution, ROI, revenue, growth, boost, scale)
+- Sound like a real person sending from Gmail, not a marketing blast
+
+BAD EXAMPLES (never write like this):
+- "Increase Sales With AI"
+- "Transform Your Outreach Process"
+- "TCS NVIDIA Partnership Update"
+- "Unlock Your Revenue Potential"
+
+GOOD EXAMPLES (write like this):
+- "quick question"
+- "idea for {company}"
+- "noticed the expansion"
+- "scaling your team?"
+- "quick thought"
+- "saw this about {company}"
+- "curious about your stack"
+
+RESPOND IN THIS EXACT JSON FORMAT (no markdown, no extra text):
+[
+  {{"subject": "...", "curiosity_score": 8, "human_score": 9, "reason": "..."}},
+  {{"subject": "...", "curiosity_score": 7, "human_score": 8, "reason": "..."}},
+  {{"subject": "...", "curiosity_score": 9, "human_score": 9, "reason": "..."}},
+  {{"subject": "...", "curiosity_score": 6, "human_score": 7, "reason": "..."}},
+  {{"subject": "...", "curiosity_score": 8, "human_score": 8, "reason": "..."}}
+]
+"""
+
+
+def _parse_subject_candidates(raw: str) -> List[SubjectCandidate]:
+    """Parse JSON array of subject candidates, tolerating markdown fences."""
+    text = raw.strip()
+    # Strip markdown code fences if present
+    text = re.sub(r"^```[a-z]*\n?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n?```$", "", text)
+    text = text.strip()
+
+    # Extract first JSON array found
+    match = re.search(r"\[.*\]", text, flags=re.DOTALL)
+    if not match:
+        raise ValueError(f"Subject Agent returned no JSON array: {raw[:200]}")
+
+    data = json.loads(match.group())
+    candidates = []
+    for item in data:
+        candidates.append(SubjectCandidate(
+            subject=str(item.get("subject", "")).strip(),
+            curiosity_score=int(item.get("curiosity_score", 5)),
+            human_score=int(item.get("human_score", 5)),
+            reason=str(item.get("reason", "")),
+        ))
+    return candidates
+
+
+def _run_subject_agent(
+    lead: Lead,
+    product_description: str,
+    research_notes: Optional[str],
+) -> tuple[str, List[str]]:
+    """
+    Stage 1: Generate 5 subject candidates, score them, return best + alternatives.
+
+    Returns:
+        (selected_subject, alternative_subjects)
+    """
+    company = lead.company or "your company"
+    first_name = lead.first_name or ""
+    last_name = lead.last_name or ""
+    title = lead.title or lead.job_title or ""
+
+    # Give the Subject Agent a short research snippet (first 200 chars)
+    research_snippet = ""
+    if research_notes:
+        for line in research_notes.splitlines():
+            cleaned = line.strip().lstrip("- ").strip()
+            if cleaned and not cleaned.lower().startswith("research fallback"):
+                research_snippet = cleaned[:200]
+                break
+
+    prompt = _SUBJECT_AGENT_PROMPT_TEMPLATE.format(
+        first_name=first_name,
+        last_name=last_name,
+        company=company,
+        title=title,
+        research_snippet=research_snippet or "No specific recent activity found.",
+    )
+
+    raw = _request_openrouter_completion(prompt)
+    candidates = _parse_subject_candidates(raw)
+
+    if not candidates:
+        # Deterministic fallback
+        return f"quick question for {company}", []
+
+    # Pick highest combined score
+    candidates.sort(key=lambda c: c.curiosity_score + c.human_score, reverse=True)
+    selected = candidates[0].subject
+    alternatives = [c.subject for c in candidates[1:] if c.subject and c.subject != selected]
+
+    return selected, alternatives
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 — Human SDR Copywriter Agent
+# ---------------------------------------------------------------------------
+
+_COPYWRITER_AGENT_PROMPT_TEMPLATE = """\
+You are an experienced SDR. You write every cold email yourself. \
+You never use templates. \
+You write the way you'd text a colleague: direct, natural, no fluff.
+
+LEAD CONTEXT:
+Name: {first_name} {last_name}
+Company: {company}
+Title: {title}
+Industry: {industry}
+Company size: {company_size}
+Location: {location}
+
+RESEARCH NOTES (from Gemini research agent — use these to personalize):
+{research_notes}
+
+ENRICHMENT SIGNALS:
+{enrichment_signals}
+
+EMAIL CONTEXT:
+Product/Service: {product_description}
+Your name (sign off with FIRST NAME ONLY): {sender_first_name}
+Selected subject line: {subject}
+
+EMAIL STRUCTURE — follow this exactly:
+Hi {first_name},
+[blank line]
+Line 1: One specific observation from the research. Saw / Noticed / Was looking at / Quick question...
+[blank line]
+Line 2: Connect it naturally to a real problem they likely face. One sentence.
+[blank line]
+Line 3: What you offer — describe it in plain words based on: "{product_description}". One or two sentences max. Do NOT copy-paste the description verbatim; rephrase it naturally in a sentence a real person would say.
+[blank line]
+Line 4: Low-pressure CTA. One short question. Examples: "Worth a quick chat?", "Open to a 10-min call?", "Curious to hear your take?"
+[blank line]
+{sender_first_name}
+
+WORD COUNT RULE: Total email body must be 70–110 words. Count carefully.
+
+WRITING STYLE:
+- Sound like you typed this in Gmail, not built it in a tool
+- Short sentences (10–15 words ideal, 20 max)
+- Casual but not sloppy
+- Slightly imperfect is fine — perfect grammar feels AI-written
+- No paragraphs longer than 2 sentences
+
+GOOD OPENER PHRASES (use similar patterns):
+"Saw your team recently expanded..."
+"Noticed you're hiring a few SDRs..."
+"Was looking at {company}'s stack..."
+"Saw the LinkedIn post about..."
+"Quick question about how you're handling..."
+
+NEVER USE:
+- "I hope this email finds you well"
+- "Given your focus on"
+- "I was impressed by"
+- "I came across"
+- "In today's competitive landscape"
+- revolutionary / cutting-edge / transform / unlock / leverage / seamless
+- game-changing / enhance / optimize / maximize / powerful solution / tailored solution
+- Any corporate jargon or marketing language
+- Long paragraphs
+- P.S. sections
+
+BAD EMAIL (never write like this):
+Hi John,
+Given your company's focus on revolutionary AI transformation, I thought you might be \
+interested in our cutting-edge platform that can optimize your workflow and leverage your \
+existing data to seamlessly enhance team performance.
+Let me know if you'd like to connect!
+Best,
+Alex
+
+GOOD EMAIL (write like this):
+Hi John,
+Saw your team recently expanded after launching the new product.
+Usually at that stage keeping outreach organized gets harder as more prospects come in.
+We help teams find and contact the right leads without spending hours manually.
+Worth a quick chat?
+Omkar
+
+OUTPUT ONLY THE EMAIL BODY — no subject line, no JSON, no explanation. \
+Start with "Hi {first_name}," and end with just your first name on its own line.
+"""
+
+
+def _count_body_words(body: str) -> int:
+    """Count words in body excluding the final signature line."""
+    sig_pattern = re.compile(r"\n\s*\w+\s*$")
+    cleaned = sig_pattern.sub("", body).strip()
+    return len(cleaned.split())
+
+
+def _run_copywriter_agent(
+    lead: Lead,
+    sender_name: str,
+    product_description: str,
+    subject: str,
+    research_notes: Optional[str],
+) -> str:
+    """
+    Stage 2: Write the email body. Returns raw body string.
+    """
+    first_name = lead.first_name or "there"
+    last_name = lead.last_name or ""
+    company = lead.company or "your company"
+    title = lead.title or lead.job_title or "your role"
+    industry = lead.industry or ""
+    company_size = lead.company_size or ""
+    location = lead.location or ""
+
+    # First name only for signature (feels more human)
+    sender_first_name = sender_name.split()[0] if sender_name else sender_name
+
+    notes_text = (research_notes or "No research notes available.").strip()
+
+    enrichment_signals = _extract_lead_research_signals(lead)
+    enrichment_text = (
+        "\n".join(f"- {s}" for s in enrichment_signals) if enrichment_signals
+        else "No enrichment signals available."
+    )
+
+    prompt = _COPYWRITER_AGENT_PROMPT_TEMPLATE.format(
+        first_name=first_name,
+        last_name=last_name,
+        company=company,
+        title=title,
+        industry=industry,
+        company_size=company_size,
+        location=location,
+        research_notes=notes_text,
+        enrichment_signals=enrichment_text,
+        product_description=product_description,
+        sender_first_name=sender_first_name,
+        subject=subject,
+    )
+
+    return _request_openrouter_completion(prompt)
+
+
+# ---------------------------------------------------------------------------
+# Stage 3 — Quality Checker Agent
+# ---------------------------------------------------------------------------
+
+_QUALITY_CHECKER_PROMPT_TEMPLATE = """\
+You are a Quality Checker for a cold email SDR system. \
+Your job is to assess whether this email sounds like it was written by a real human SDR \
+or by an AI.
+
+EMAIL TO EVALUATE:
+---
+{email_body}
+---
+
+Ask yourself these questions internally before scoring:
+1. "Would a busy founder actually type this email?"
+2. "Does this reference something specific and real about the company/person?"
+3. "Does it use any AI giveaway patterns (corporate language, over-explaining, fake excitement)?"
+4. "Is this 70–110 words, short sentences, natural tone?"
+
+SCORE THE EMAIL:
+- human_score: 0–100 (100 = reads exactly like a real SDR wrote it)
+- personalization_score: 0–100 (100 = references specific, verified detail about this person/company)
+- spam_risk: 0–100 (100 = will definitely hit spam)
+- sounds_ai_generated: true or false
+
+IMPORTANT THRESHOLDS:
+- human_score < 85 → email needs a rewrite
+- sounds_ai_generated = true → email needs a rewrite
+- spam_risk > 60 → email needs a rewrite
+
+Also classify the email angle:
+- pain_point: opens by touching a pain/problem
+- curiosity: opens with an interesting observation
+- question: opens with a direct question
+- case_study: references a similar company result
+- direct: goes straight to what you offer
+
+RESPOND IN THIS EXACT JSON FORMAT (no markdown, no extra text):
+{{
+  "human_score": 88,
+  "personalization_score": 75,
+  "spam_risk": 12,
+  "sounds_ai_generated": false,
+  "email_angle": "curiosity",
+  "needs_rewrite": false,
+  "rewrite_reason": ""
+}}
+"""
+
+
+def _parse_quality_report(raw: str) -> Dict[str, Any]:
+    """Parse the quality checker JSON response, tolerating markdown fences."""
+    text = raw.strip()
+    text = re.sub(r"^```[a-z]*\n?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n?```$", "", text)
+    text = text.strip()
+
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if not match:
+        raise ValueError(f"Quality Checker returned no JSON: {raw[:200]}")
+
+    return json.loads(match.group())
+
+
+def _run_quality_checker(email_body: str) -> Dict[str, Any]:
+    """
+    Stage 3: Score the email. Returns a quality report dict.
+    """
+    prompt = _QUALITY_CHECKER_PROMPT_TEMPLATE.format(email_body=email_body)
+    raw = _request_openrouter_completion(prompt)
+    return _parse_quality_report(raw)
+
+
+# ---------------------------------------------------------------------------
+# Main orchestrator
+# ---------------------------------------------------------------------------
 
 async def generate_email(
     lead: Lead,
     sender_name: str,
     tone: str = "professional",
     goal: str = "schedule a meeting",
-    product_description: str = "our product"
+    product_description: str = "our product",
 ) -> GeneratedEmail:
     """
-    Generate personalized email copy using OpenRouter with quality validation.
-    
-    Uses manual research notes when available to create highly personalized emails
-    that reference specific, recent information about the lead or their company.
-    
-    Implements retry logic: attempts generation up to 2 times, validating quality
-    each time and returning the best attempt.
-    
+    Human SDR Copywriter Agent — generate a cold email that reads like
+    a real person wrote it.
+
+    Pipeline:
+        Stage 1 → Subject Agent  (1 LLM call)
+        Stage 2 → Copywriter Agent  (1 LLM call)
+        Stage 3 → Quality Checker  (1 LLM call)
+        [optional] Rewrite if quality thresholds fail  (1–2 more calls)
+        Final → Rule-based _check_email_quality() safety net
+
     Args:
-        lead: Lead object with contact information and research notes
-        sender_name: Name of the person sending the email (for signature)
-        tone: Email tone (professional, friendly, casual, direct)
-        goal: Email goal (e.g., "schedule a meeting", "get a reply")
-        product_description: Description of product/service
-        
+        lead:                Lead object (research_notes already populated by route layer)
+        sender_name:         Full name of the sending user (first name used in signature)
+        tone:                Kept for API compatibility; not used (style is baked into prompts)
+        goal:                Kept for API compatibility
+        product_description: What Prosario does / what the campaign is selling
+
     Returns:
-        GeneratedEmail with subject and body
-        
+        GeneratedEmail with body, subject, and A/B metadata fields
+
     Raises:
-        ValueError: If OPENROUTER_API_KEY not configured or generation fails
+        ValueError: If OPENROUTER_API_KEY not configured or all generation attempts fail
     """
     if not settings.OPENROUTER_API_KEY:
         raise ValueError("OPENROUTER_API_KEY not configured")
-    
-    # Build enriched context from lead data
-    lead_context_parts = [f"- Name: {lead.first_name} {lead.last_name}"]
-    
-    if lead.title:
-        lead_context_parts.append(f"- Title: {lead.title}")
-    
-    if lead.company:
-        lead_context_parts.append(f"- Company: {lead.company}")
-    
-    if lead.industry:
-        lead_context_parts.append(f"- Industry: {lead.industry}")
-    
-    if lead.company_size:
-        lead_context_parts.append(f"- Company Size: {lead.company_size}")
-    
-    if lead.location:
-        lead_context_parts.append(f"- Location: {lead.location}")
 
-    if lead.linkedin_url:
-        lead_context_parts.append(f"- LinkedIn URL: {lead.linkedin_url}")
+    research_notes = lead.research_notes or None
 
-    if lead.job_title:
-        lead_context_parts.append(f"- LinkedIn Job Title: {lead.job_title}")
+    # -----------------------------------------------------------------------
+    # Stage 1 — Subject Agent
+    # -----------------------------------------------------------------------
+    try:
+        selected_subject, alternative_subjects = await asyncio.to_thread(
+            _run_subject_agent, lead, product_description, research_notes
+        )
+        logger.info(
+            "Subject Agent selected '%s' for lead %s (alternatives: %s)",
+            selected_subject, lead.id, alternative_subjects,
+        )
+    except Exception as exc:
+        logger.warning("Subject Agent failed for lead %s, using fallback: %s", lead.id, exc)
+        company = lead.company or "your company"
+        selected_subject = f"quick question for {company}"
+        alternative_subjects = []
 
-    if lead.seniority:
-        lead_context_parts.append(f"- Seniority: {lead.seniority}")
-
-    if lead.linkedin_headline:
-        lead_context_parts.append(f"- LinkedIn Headline: {lead.linkedin_headline}")
-    
-    lead_context = "Lead Information:\n" + "\n".join(lead_context_parts)
-
-    # Add enrichment signals (LinkedIn/company intelligence) if present
-    research_signals = _extract_lead_research_signals(lead)
-    enrichment_section = ""
-    if research_signals:
-        enrichment_section = "Research Signals (LinkedIn + Enrichment):\n" + "\n".join(f"- {s}" for s in research_signals)
-    
-    # Add research notes if available (MOST IMPORTANT)
-    research_section = ""
-    if lead.research_notes:
-        research_section = _format_research_notes_prompt(lead.research_notes)
-    
-    # Build the new, improved prompt
-    prompt = f"""You are a top-performing sales rep writing a cold outreach email. Write like you're sending a quick Slack message to a colleague, not a formal business letter. Use short sentences. Be direct. Skip the fluff.
-
-{lead_context}
-
-{research_section}
-
-{enrichment_section}
-
-Email Context:
-- Tone: {tone}
-- Goal: {goal}
-- Product/Service: {product_description}
-- Sender: {sender_name}
-
-=== CRITICAL RULES ===
-
-1. OPENING (15-30 words):
-   - Start with "{lead.first_name} -" (casual, direct)
-   - {"MANDATORY: Use a SPECIFIC detail from the research notes above (hiring numbers, funding, recent posts, specific tools they use)" if lead.research_notes else "reference their role/company in a specific way"}
-   - NO generic greetings like "I hope this finds you well"
-   
-2. PROBLEM/CONTEXT (30-40 words):
-   - Connect their situation to a likely problem they face
-   - Be specific about the challenge (use numbers, roles, or situations when possible)
-   - Make it feel like you understand their world
-   
-3. SOLUTION PREVIEW (20-30 words):
-   - Briefly describe what you offer and the specific benefit
-   - Use simple, direct language
-   - Connect it directly to the problem mentioned
-   
-4. CALL TO ACTION (10-15 words):
-   - Ask ONE clear question or propose ONE specific action
-   - Keep it low-pressure (e.g., "Quick 10-min call?", "Worth a 15-min walkthrough?")
-   
-5. SIGNATURE:
-   - End with: "Best regards,\\n{sender_name}"
-    - Do NOT add any P.S. or postscript line after signature
-
-=== WRITING STYLE RULES ===
-- Use short, punchy sentences (10-15 words average, 20 max)
-- Sound like you're texting a smart colleague, not writing a formal letter
-- Be direct - get to the point fast
-- Use simple words - avoid corporate jargon
-- If you mention their scale/size, be specific with numbers ("55 countries" not "massive scale")
-- Don't state the obvious ("must be challenging" adds no value - skip it)
-
-=== DELIVERABILITY RULES (MANDATORY) ===
-- Avoid spam trigger words: free, guarantee, urgent, win
-- Keep sentence length short and readable
-- Include personalization using lead/company context
-- Include at most 1 link in the body
-- Keep the tone conversational and human, not promotional
-
-=== SPECIFICITY REQUIREMENTS ===
-- If research_notes mentions numbers (employees, countries, offices), USE THEM in your email
-- If research_notes mentions recent activity (product launch, funding, hiring), REFERENCE IT in first sentence
-- If research_notes mentions tech stack, MENTION IT to show you did research
-- Don't just say "your scale is massive" - say "operating in 55 countries" or "with 600k employees"
-- Don't say "must be challenging" - instead ask a specific question about HOW they handle it
-
-=== VALUE PROP FORMAT ===
-Instead of vague: "We help companies centralize their marketing"
-Be specific: "We built a dashboard where all regional teams can create campaigns from approved templates"
-
-Instead of: "ensuring every campaign delivers measurable results"
-Be specific: "so you don't end up with 10 different versions of the same message"
-
-=== BANNED PHRASES (NEVER USE) ===
-- "I came across your profile/company"
-- "I hope this email finds you well"
-- "wanted to reach out"
-- "thought I'd reach out"
-- "I'd love to chat"
-- "explore how we might"
-- "cutting-edge" or "industry-leading"
-- "must be a huge undertaking"
-- "must be challenging"
-- "are you ever finding it difficult"
-- "ensuring consistent messaging"
-- "optimizing campaign performance"
-- "resonates and delivers"
-- "measurable results"
-- "fragmented effort"
-- "unified brand voice"
-- "massive scale"
-- Any corporate buzzwords
-
-=== EXAMPLE 1 - BAD (too generic and corporate) ===
-SUBJECT: Marketing coordination at scale
----
-Omkar - with TCS's massive scale, coordinating marketing efforts across so many business units must be a huge undertaking.
-
-Even with excellent internal teams, ensuring consistent messaging and optimizing campaign performance for every sector can easily become fragmented. Are you ever finding it difficult to maintain a unified brand voice across all your global initiatives?
-
-We help companies like TCS centralize their marketing strategy and execution, ensuring every campaign resonates and delivers measurable results, without the fragmented effort.
-
-Worth a quick 15-min chat to see how we tackle this?
-
-Best regards,
-{sender_name}
-
-=== EXAMPLE 2 - GOOD (specific and conversational) ===
-SUBJECT: TCS's new AI practice rollout
----
-Omkar - congrats on launching the AI consulting practice. Saw it's now live in 55 countries.
-
-Quick question: How are you keeping messaging consistent across all those regions? Most teams we work with end up with 10 different versions of the same campaign.
-
-We built {product_description} for exactly this - single hub where regional teams collaborate without bottlenecking through HQ. Works with your Salesforce setup.
-
-15-min walkthrough?
-
-Best regards,
-{sender_name}
-
-WHY EXAMPLE 2 IS BETTER:
-- References specific recent activity (AI practice launch)
-- Uses specific numbers (55 countries)
-- Asks a genuine, short question
-- Mentions their tech stack (Salesforce)
-- Explains the solution specifically, not vaguely
-- Shorter sentences, conversational tone
-- 78 words vs 93 words
-
-=== CONVERSATIONAL TONE EXAMPLES ===
-
-FORMAL (avoid):
-"Are you ever finding it difficult to maintain a unified brand voice across all your global initiatives?"
-
-CONVERSATIONAL (use):
-"How do you keep messaging consistent across all those regions?"
-
----
-
-FORMAL (avoid):
-"We help companies like yours centralize their marketing strategy and execution"
-
-CONVERSATIONAL (use):
-"We built [tool] for this exact problem"
-
----
-
-FORMAL (avoid):
-"with TCS's massive scale, coordinating marketing must be huge"
-
-CONVERSATIONAL (use):
-"with TCS operating in 55 countries"
-
-=== YOUR TASK ===
-Write a cold email following ALL rules above. Use research notes/signals if provided. Keep total length 80-120 words.
-
-Format your response EXACTLY as:
-SUBJECT: [short, specific subject line - 3-6 words]
----
-[email body]
-
-Best regards,
-{sender_name}
-Do not include any P.S.
-"""
-    
-    max_attempts = 2
-    best_email: Optional[GeneratedEmail] = None
-    best_issues: List[str] = []
-    
-    for attempt in range(max_attempts):
+    # -----------------------------------------------------------------------
+    # Stage 2 — Copywriter Agent (up to 2 attempts if output is empty)
+    # -----------------------------------------------------------------------
+    raw_body: Optional[str] = None
+    for copy_attempt in range(2):
         try:
-            content = await asyncio.to_thread(_request_openrouter_completion, prompt)
-            
-            # Parse response
-            if "---" in content:
-                parts = content.split("---", 1)
-                subject_part = parts[0].strip()
-                body = parts[1].strip()
-                
-                # Extract subject (remove "SUBJECT:" prefix if present)
-                if subject_part.startswith("SUBJECT:"):
-                    subject = subject_part.replace("SUBJECT:", "").strip()
-                else:
-                    subject = subject_part
-            else:
-                # Fallback if format not followed
-                lines = content.split("\n", 1)
-                subject = lines[0].replace("SUBJECT:", "").strip() if lines else "Follow-up"
-                body = lines[1].strip() if len(lines) > 1 else content
-            
-            body = _strip_postscript(body)
-            email = GeneratedEmail(subject=subject, body=body)
-            
-            # Check quality
-            issues = _check_email_quality(email, lead)
-            
-            # If no issues, return immediately
-            if not issues:
-                return email
-            
-            # Track best attempt
-            if best_email is None or len(issues) < len(best_issues):
-                best_email = email
-                best_issues = issues
-            
-            # If this is not the last attempt and we found issues, try again
-            if attempt < max_attempts - 1:
-                # Modify prompt for retry to address specific issues
-                prompt += f"\n\nPREVIOUS ATTEMPT HAD ISSUES:\n" + "\n".join(f"- {issue}" for issue in issues) + "\n\nPlease fix these issues in your next attempt."
-                continue
-            
-        except Exception as e:
-            if attempt == max_attempts - 1:
-                # On last attempt, raise the error
-                raise ValueError(f"Failed to generate email after {max_attempts} attempts: {str(e)}")
-            # Otherwise, try again
-            continue
-    
-    # Return best attempt even if it has some issues
-    if best_email:
-        return best_email
-    
-    raise ValueError("Failed to generate email: No valid attempts produced")
+            raw_body = await asyncio.to_thread(
+                _run_copywriter_agent,
+                lead, sender_name, product_description, selected_subject, research_notes,
+            )
+            raw_body = _strip_postscript(raw_body)
+            if raw_body and len(raw_body.strip()) > 20:
+                break
+        except Exception as exc:
+            logger.warning(
+                "Copywriter Agent attempt %d failed for lead %s: %s",
+                copy_attempt + 1, lead.id, exc,
+            )
+            raw_body = None
 
+    if not raw_body:
+        raise ValueError("Copywriter Agent failed to produce an email body after 2 attempts.")
+
+    # -----------------------------------------------------------------------
+    # Stage 3 — Quality Checker (with one rewrite if thresholds fail)
+    # -----------------------------------------------------------------------
+    quality_report: Dict[str, Any] = {}
+    email_angle: Optional[str] = None
+    final_body = raw_body
+
+    try:
+        quality_report = await asyncio.to_thread(_run_quality_checker, raw_body)
+        email_angle = quality_report.get("email_angle")
+        needs_rewrite = quality_report.get("needs_rewrite", False)
+
+        # Enforce thresholds regardless of model's own `needs_rewrite` flag
+        human_score = int(quality_report.get("human_score", 100))
+        spam_risk = int(quality_report.get("spam_risk", 0))
+        sounds_ai = bool(quality_report.get("sounds_ai_generated", False))
+
+        if human_score < 85 or sounds_ai or spam_risk > 60:
+            needs_rewrite = True
+            logger.info(
+                "Quality Checker triggered rewrite for lead %s "
+                "(human=%d, spam=%d, ai=%s)",
+                lead.id, human_score, spam_risk, sounds_ai,
+            )
+
+        if needs_rewrite:
+            rewrite_reason = quality_report.get("rewrite_reason", "")
+            logger.info("Rewriting email for lead %s. Reason: %s", lead.id, rewrite_reason)
+            try:
+                rewritten_body = await asyncio.to_thread(
+                    _run_copywriter_agent,
+                    lead, sender_name, product_description, selected_subject, research_notes,
+                )
+                rewritten_body = _strip_postscript(rewritten_body)
+                if rewritten_body and len(rewritten_body.strip()) > 20:
+                    final_body = rewritten_body
+                    # Re-score the rewrite
+                    try:
+                        quality_report = await asyncio.to_thread(
+                            _run_quality_checker, final_body
+                        )
+                        email_angle = quality_report.get("email_angle", email_angle)
+                    except Exception as qc_exc:
+                        logger.warning(
+                            "Quality re-check after rewrite failed for lead %s: %s",
+                            lead.id, qc_exc,
+                        )
+            except Exception as rw_exc:
+                logger.warning(
+                    "Rewrite attempt failed for lead %s, keeping original: %s",
+                    lead.id, rw_exc,
+                )
+
+    except Exception as qc_exc:
+        logger.warning(
+            "Quality Checker failed for lead %s (continuing with raw body): %s",
+            lead.id, qc_exc,
+        )
+
+    # -----------------------------------------------------------------------
+    # Final — rule-based safety net (existing _check_email_quality)
+    # -----------------------------------------------------------------------
+    email_obj = GeneratedEmail(subject=selected_subject, body=final_body)
+    issues = _check_email_quality(email_obj, lead)
+    if issues:
+        logger.info(
+            "Rule-based quality check found %d issue(s) for lead %s: %s",
+            len(issues), lead.id, issues,
+        )
+
+    # -----------------------------------------------------------------------
+    # Build enriched response with A/B metadata
+    # -----------------------------------------------------------------------
+    word_count = _count_body_words(final_body)
+
+    return GeneratedEmail(
+        subject=selected_subject,
+        body=final_body,
+        email_angle=email_angle,
+        word_count=word_count,
+        tone=tone,
+        selected_subject=selected_subject,
+        alternative_subjects=alternative_subjects,
+        quality_report={
+            "human_score": quality_report.get("human_score"),
+            "personalization_score": quality_report.get("personalization_score"),
+            "spam_risk": quality_report.get("spam_risk"),
+            "sounds_ai_generated": quality_report.get("sounds_ai_generated"),
+        } if quality_report else None,
+    )

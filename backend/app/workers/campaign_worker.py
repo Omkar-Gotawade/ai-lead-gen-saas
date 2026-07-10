@@ -9,6 +9,7 @@ from app.models.campaign import Campaign
 from app.models.campaign_lead import CampaignLead, CampaignLeadStatus
 from app.models.sequence_step import SequenceStep
 from app.models.lead import Lead
+from app.models.sending_log import SendingLog, SendStatus
 from app.workers.email_worker import send_email_task
 from app.services.ai_email_service import generate_email
 from app.services.lead_research_service import research_lead_with_status
@@ -331,6 +332,40 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
                 analysis["issues"],
             )
         
+        # ---------------------------------------------------------------
+        # Threading: look up the root email's Message-ID so follow-ups
+        # arrive in the same inbox thread instead of as new conversations.
+        # ---------------------------------------------------------------
+        in_reply_to: Optional[str] = None
+        references: Optional[str] = None
+
+        if step_index > 1:
+            root_log = (
+                db.query(SendingLog)
+                .filter(
+                    SendingLog.campaign_id == campaign.id,
+                    SendingLog.lead_id == lead.id,
+                    SendingLog.step_index == 1,
+                    SendingLog.status == SendStatus.SENT,
+                )
+                .order_by(SendingLog.sent_at.asc())
+                .first()
+            )
+
+            if root_log and root_log.message_id:
+                in_reply_to = root_log.message_id
+                references = root_log.message_id
+                logger.info(
+                    "Threading follow-up (step %d) for lead %s onto root message_id=%s",
+                    step_index, lead.id, in_reply_to,
+                )
+            else:
+                # Fallback: send normally — do not fail the campaign
+                logger.warning(
+                    "No root message_id found for campaign=%s lead=%s; sending step %d unthreaded",
+                    campaign.id, lead.id, step_index,
+                )
+
         # Send email
         send_email_task.delay(
             user_id=str(campaign.user_id),
@@ -340,6 +375,8 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
             lead_id=str(lead.id),
             campaign_id=str(campaign.id),
             step_index=step_index,
+            in_reply_to=in_reply_to,
+            references=references,
         )
         
         # Update campaign lead
