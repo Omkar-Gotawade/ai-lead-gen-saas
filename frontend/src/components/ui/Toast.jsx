@@ -34,7 +34,7 @@ export default function Toast({ message, title, variant = 'default', onClose }) 
       className={[
         'pointer-events-auto flex items-start gap-3',
         'min-w-[280px] max-w-sm w-full rounded-xl border shadow-card-lg',
-        'bg-ink-900/95 backdrop-blur-md text-white px-4 py-3',
+        'bg-[#1a1c26]/95 backdrop-blur-md text-white px-4 py-3',
         border,
         'transition-all duration-280 ease-out',
         visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-6',

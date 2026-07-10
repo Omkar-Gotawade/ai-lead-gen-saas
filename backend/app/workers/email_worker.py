@@ -145,6 +145,7 @@ def send_email_task(
                 provider_type=provider.provider_type.value,
                 to_email=to_email,
                 subject=subject,
+                body=body,
                 message_id=message_id,
                 status=SendStatus.QUEUED,
                 retry_count=self.request.retries,

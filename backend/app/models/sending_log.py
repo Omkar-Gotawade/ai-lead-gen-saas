@@ -33,6 +33,7 @@ class SendingLog(Base):
     provider_type = Column(String, nullable=False)
     to_email = Column(String, nullable=False)
     subject = Column(String, nullable=False)
+    body = Column(String, nullable=True)
 
     status = Column(SQLEnum(SendStatus), default=SendStatus.QUEUED, nullable=False)
     error_message = Column(String, nullable=True)

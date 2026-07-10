@@ -896,3 +896,102 @@ async def generate_email(
             "sounds_ai_generated": quality_report.get("sounds_ai_generated"),
         } if quality_report else None,
     )
+
+# ---------------------------------------------------------------------------
+# FollowUp Agent
+# ---------------------------------------------------------------------------
+
+_FOLLOWUP_AGENT_PROMPT_TEMPLATE = """\
+You are an experienced SDR writing a follow-up email to a cold prospect.
+You NEVER use templates. You write naturally, like sending a quick reply in Gmail.
+
+LEAD CONTEXT:
+Name: {first_name} {last_name}
+Company: {company}
+Title: {title}
+
+PREVIOUS EMAIL (Sent by you):
+{original_email}
+
+PREVIOUS FOLLOW-UPS (If any):
+{previous_followups}
+
+YOUR TASK:
+Write a SHORT, natural follow-up email. It should thread directly onto the previous email.
+
+STRICT RULES:
+- Length: 20-50 words MAXIMUM.
+- Do NOT repeat the product pitch.
+- Just a quick bump, a new angle, or a short question.
+- Sound casual but polite.
+- NO corporate jargon.
+- Do NOT use: "I hope this email finds you well", "Just bubbling this up", "Just wanted to follow up", "Checking in".
+
+GOOD EXAMPLES (write like this):
+"Hi {first_name} - any thoughts on this?"
+"Hi {first_name}, just bringing this to the top of your inbox in case you missed it. Worth a brief chat?"
+"Hi {first_name}, wanted to see if {company} is still prioritizing this right now?"
+
+OUTPUT ONLY THE EMAIL BODY — no subject line, no JSON, no explanation.
+Start with "Hi {first_name}," and end with your first name on its own line:
+{sender_first_name}
+"""
+
+def _run_followup_agent(
+    lead: Lead,
+    sender_name: str,
+    original_email: str,
+    previous_followups: str,
+) -> str:
+    first_name = lead.first_name or "there"
+    last_name = lead.last_name or ""
+    company = lead.company or "your company"
+    title = lead.title or lead.job_title or "your role"
+    sender_first_name = sender_name.split()[0] if sender_name else sender_name
+
+    prompt = _FOLLOWUP_AGENT_PROMPT_TEMPLATE.format(
+        first_name=first_name,
+        last_name=last_name,
+        company=company,
+        title=title,
+        original_email=original_email,
+        previous_followups=previous_followups or "None",
+        sender_first_name=sender_first_name,
+    )
+    return _request_openrouter_completion(prompt)
+
+
+async def generate_followup_email(
+    lead: Lead,
+    sender_name: str,
+    original_email: str,
+    previous_followups: str = "",
+) -> GeneratedEmail:
+    if not settings.OPENROUTER_API_KEY:
+        raise ValueError("OPENROUTER_API_KEY not configured")
+
+    raw_body: Optional[str] = None
+    for copy_attempt in range(2):
+        try:
+            raw_body = await asyncio.to_thread(
+                _run_followup_agent,
+                lead, sender_name, original_email, previous_followups,
+            )
+            raw_body = _strip_postscript(raw_body)
+            if raw_body and len(raw_body.strip()) > 5:
+                break
+        except Exception as exc:
+            logger.warning(
+                "FollowUp Agent attempt %d failed for lead %s: %s",
+                copy_attempt + 1, lead.id, exc,
+            )
+            raw_body = None
+
+    if not raw_body:
+        raise ValueError("FollowUp Agent failed to produce an email body.")
+    
+    return GeneratedEmail(
+        subject="", # Threaded reply, no subject needed
+        body=raw_body,
+    )
+

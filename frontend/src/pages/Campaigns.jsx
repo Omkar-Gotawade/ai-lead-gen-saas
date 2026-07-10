@@ -20,6 +20,8 @@ import Badge from '../components/ui/Badge';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/Alert';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import AISequenceBuilder from '../components/AISequenceBuilder';
+import { Sparkles, PenTool } from 'lucide-react';
 
 function Campaigns() {
   const navigate = useNavigate();
@@ -39,6 +41,8 @@ function Campaigns() {
   /* ── Create form state ────────────────────────────────────── */
   const [newCampaign, setNewCampaign] = useState({ name: '', description: '' });
   const [isCreating, setIsCreating] = useState(false);
+  const [showManualBuilder, setShowManualBuilder] = useState(false);
+  const [showAiBuilder, setShowAiBuilder] = useState(false);
 
   /* ── Confirm delete dialog state ──────────────────────────── */
   const [pendingDelete, setPendingDelete] = useState(null); // { id, name }
@@ -141,7 +145,7 @@ function Campaigns() {
         </Alert>
       )}
 
-      {/* Create form */}
+      {/* Create Campaign */}
       <Card>
         <CardHeader>
           <CardTitle>New Campaign</CardTitle>

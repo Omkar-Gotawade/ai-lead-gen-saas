@@ -15,7 +15,7 @@ import {
   X,
   Users
 } from 'lucide-react';
-import { getCampaign, getCampaignLeads } from '../api/campaigns';
+import { getCampaign, getCampaignLeads, updateCampaign } from '../api/campaigns';
 import { getSequenceSteps, createSequenceStep, updateSequenceStep, deleteSequenceStep } from '../api/sequenceSteps';
 
 import Button from '../components/ui/Button';
@@ -44,7 +44,17 @@ const STEP_FORM_DEFAULT = {
   use_ai_generation: false,
   ai_tone: 'professional',
   ai_goal: 'schedule a meeting',
+  ai_goal: 'schedule a meeting',
   product_description: '',
+};
+
+const getDefaultForStep = (index) => {
+  if (index === 2) {
+    return `Hey {{first_name}},\n\nJust bringing this back up.\n\nThought it might be worth revisiting my previous note.\n\nOpen to taking a look?\n\n{{sender_name}}`;
+  } else if (index === 3) {
+    return `Hey {{first_name}},\n\nLast quick follow-up.\n\nIf this isn't relevant right now, no worries.\n\nHappy to reconnect later.\n\n{{sender_name}}`;
+  }
+  return '';
 };
 
 function CampaignEditor() {
@@ -61,8 +71,6 @@ function CampaignEditor() {
   const [editingStep, setEditingStep] = useState(null);
   const [stepForm, setStepForm] = useState(STEP_FORM_DEFAULT);
   const [deleteStepId, setDeleteStepId] = useState(null);
-
-  /* ─── Data fetch ────────────────────────────────────────────── */
   const fetchCampaignData = useCallback(async () => {
     try {
       setLoading(true);
@@ -72,8 +80,19 @@ function CampaignEditor() {
         getCampaignLeads(campaignId),
       ]);
       setCampaign(campaignData);
+
       setSteps(stepsData.sort((a, b) => a.step_index - b.step_index));
       setEnrolledLeads(leadsData);
+      
+      if (!editingStep) {
+        const nextIndex = stepsData.length + 1;
+        setStepForm(prev => ({ 
+          ...prev, 
+          step_index: nextIndex, 
+          body_template: prev.body_template || getDefaultForStep(nextIndex) 
+        }));
+      }
+
       setError(null);
     } catch {
       setError('Failed to load campaign');
@@ -89,10 +108,28 @@ function CampaignEditor() {
   /* ─── Step handlers ─────────────────────────────────────────── */
   const handleSaveStep = async (e) => {
     e.preventDefault();
-    if (!stepForm.subject_template.trim() || !stepForm.body_template.trim()) {
-      toast.error('Subject and body templates are required');
+    
+    // For Step 1, subject is always required (either as main or fallback)
+    if (stepForm.step_index === 1 && (!stepForm.subject_template || !stepForm.subject_template.trim())) {
+      toast.error('Subject template is required for Step 1');
       return;
     }
+    
+    if (stepForm.step_index === 1 && !stepForm.use_ai_generation && (!stepForm.body_template || !stepForm.body_template.trim())) {
+      toast.error('Body template is required');
+      return;
+    }
+
+    if (stepForm.step_index > 1 && (!stepForm.body_template || !stepForm.body_template.trim())) {
+      toast.error('Body template is required for follow-ups');
+      return;
+    }
+    
+    if (stepForm.step_index === 1 && stepForm.use_ai_generation && (!stepForm.product_description || !stepForm.product_description.trim())) {
+      toast.error('Product description is required for AI generation');
+      return;
+    }
+    
     try {
       if (editingStep) {
         await updateSequenceStep(editingStep.id, stepForm);
@@ -102,7 +139,8 @@ function CampaignEditor() {
         toast.success('Step created successfully');
       }
       setEditingStep(null);
-      setStepForm({ ...STEP_FORM_DEFAULT, step_index: steps.length + 1 });
+      const nextIndex = steps.length + (editingStep ? 0 : 1) + 1;
+      setStepForm({ ...STEP_FORM_DEFAULT, step_index: nextIndex, body_template: getDefaultForStep(nextIndex) });
       await fetchCampaignData();
     } catch {
       toast.error('Failed to save step');
@@ -113,8 +151,8 @@ function CampaignEditor() {
     setEditingStep(step);
     setStepForm({
       step_index: step.step_index,
-      subject_template: step.subject_template,
-      body_template: step.body_template,
+      subject_template: step.subject_template || '',
+      body_template: step.body_template || '',
       delay_days: step.delay_days,
       use_ai_generation: step.use_ai_generation || false,
       ai_tone: step.ai_tone || 'professional',
@@ -123,6 +161,8 @@ function CampaignEditor() {
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+
 
   const handleConfirmDelete = async () => {
     try {
@@ -138,7 +178,8 @@ function CampaignEditor() {
 
   const handleCancelEdit = () => {
     setEditingStep(null);
-    setStepForm({ ...STEP_FORM_DEFAULT, step_index: steps.length + 1 });
+    const nextIndex = steps.length + 1;
+    setStepForm({ ...STEP_FORM_DEFAULT, step_index: nextIndex, body_template: getDefaultForStep(nextIndex) });
   };
 
   const getStatusVariant = (status) => {
@@ -221,6 +262,8 @@ function CampaignEditor() {
         </div>
       </div>
 
+
+
       {/* Steps + Form grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Sequence steps list */}
@@ -255,10 +298,10 @@ function CampaignEditor() {
                             Wait {step.delay_days} day{step.delay_days !== 1 ? 's' : ''}
                           </span>
                         )}
-                        {step.use_ai_generation && (
+                        {(step.use_ai_generation && step.step_index === 1) && (
                           <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50 text-xs">
                             <Sparkles className="w-3 h-3 mr-1" />
-                            AI Personalized
+                            AI Personalization
                           </Badge>
                         )}
                       </div>
@@ -309,9 +352,18 @@ function CampaignEditor() {
                     type="number"
                     min="1"
                     value={stepForm.step_index}
-                    onChange={(e) =>
-                      setStepForm({ ...stepForm, step_index: parseInt(e.target.value) })
-                    }
+                    onChange={(e) => {
+                      const newIndex = parseInt(e.target.value) || 1;
+                      if (!editingStep) {
+                        setStepForm({ 
+                          ...stepForm, 
+                          step_index: newIndex,
+                          body_template: getDefaultForStep(newIndex)
+                        });
+                      } else {
+                        setStepForm({ ...stepForm, step_index: newIndex });
+                      }
+                    }}
                     required
                   />
                   <Input
@@ -327,76 +379,83 @@ function CampaignEditor() {
                   />
                 </div>
 
-                {/* AI Personalization toggle */}
-                <div className="border border-ink-100 rounded-xl p-4 bg-ink-50 space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      id="use_ai_generation"
-                      className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-ink-300"
-                      checked={stepForm.use_ai_generation}
-                      onChange={(e) =>
-                        setStepForm({ ...stepForm, use_ai_generation: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-ink-900 flex items-center gap-2">
-                      <Bot className="w-4 h-4 text-purple-600" />
-                      Use AI Personalization
-                    </span>
-                  </label>
+                {stepForm.step_index === 1 && (
+                  <div className="bg-purple-50/50 rounded-xl border border-purple-100 p-4 space-y-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 border-ink-300"
+                        checked={stepForm.use_ai_generation}
+                        onChange={(e) =>
+                          setStepForm({ ...stepForm, use_ai_generation: e.target.checked })
+                        }
+                      />
+                      <span className="text-sm font-medium text-ink-900">
+                        Use AI Personalization for First Email
+                      </span>
+                    </label>
 
-                  {stepForm.use_ai_generation && (
-                    <div className="space-y-4 pl-7 border-l-2 border-purple-200">
-                      <Select
-                        label="Email Tone"
-                        value={stepForm.ai_tone}
-                        onChange={(e) => setStepForm({ ...stepForm, ai_tone: e.target.value })}
-                        options={AI_TONE_OPTIONS}
-                        required
-                      />
-                      <Input
-                        label="Email Goal"
-                        placeholder="e.g., schedule a meeting"
-                        value={stepForm.ai_goal}
-                        onChange={(e) => setStepForm({ ...stepForm, ai_goal: e.target.value })}
-                        required
-                      />
-                      <div>
-                        <label className="block text-xs font-medium text-ink-600 mb-1.5">
-                          Product / Service Description
-                        </label>
-                        <textarea
-                          rows="3"
-                          className="w-full px-3 py-2.5 bg-surface border border-ink-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 text-sm text-ink-900 placeholder-ink-400 transition-colors resize-none"
-                          placeholder="Describe your offer for AI context..."
-                          value={stepForm.product_description}
-                          onChange={(e) =>
-                            setStepForm({ ...stepForm, product_description: e.target.value })
-                          }
-                          required
-                        />
+                    {stepForm.use_ai_generation && (
+                      <div className="pt-2 space-y-4 border-t border-purple-100">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Select
+                            label="Email Tone"
+                            value={stepForm.ai_tone}
+                            onChange={(e) =>
+                              setStepForm({ ...stepForm, ai_tone: e.target.value })
+                            }
+                            options={AI_TONE_OPTIONS}
+                            required
+                          />
+                          <Input
+                            label="Campaign Goal"
+                            placeholder="e.g., schedule a discovery call"
+                            value={stepForm.ai_goal}
+                            onChange={(e) =>
+                              setStepForm({ ...stepForm, ai_goal: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-ink-600 mb-1.5">
+                            Product / Service Description
+                          </label>
+                          <textarea
+                            rows="3"
+                            className="w-full px-3 py-2.5 bg-surface border border-ink-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 text-sm text-ink-900 placeholder-ink-400 transition-colors resize-none"
+                            placeholder="What are you selling? What are the key benefits? How does it help the prospect?"
+                            value={stepForm.product_description}
+                            onChange={(e) =>
+                              setStepForm({ ...stepForm, product_description: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
-                <Input
-                  label={
-                    stepForm.use_ai_generation
-                      ? 'Subject Template (fallback)'
-                      : 'Subject Template'
-                  }
-                  placeholder="Hi {{first_name}}, quick question…"
-                  value={stepForm.subject_template}
-                  onChange={(e) =>
-                    setStepForm({ ...stepForm, subject_template: e.target.value })
-                  }
-                  required
-                />
+                {stepForm.step_index === 1 && (
+                  <Input
+                    label={
+                      stepForm.use_ai_generation
+                        ? 'Subject Template (fallback)'
+                        : 'Subject Template'
+                    }
+                    placeholder="Hi {{first_name}}, quick question…"
+                    value={stepForm.subject_template}
+                    onChange={(e) =>
+                      setStepForm({ ...stepForm, subject_template: e.target.value })
+                    }
+                    required
+                  />
+                )}
 
                 <div>
                   <label className="block text-xs font-medium text-ink-600 mb-1.5">
-                    {stepForm.use_ai_generation ? 'Body Template (fallback)' : 'Body Template'}
+                    {stepForm.step_index === 1 && stepForm.use_ai_generation ? 'Body Template (fallback)' : 'Body Template'}
                   </label>
                   <textarea
                     rows="7"
@@ -406,7 +465,7 @@ function CampaignEditor() {
                     onChange={(e) =>
                       setStepForm({ ...stepForm, body_template: e.target.value })
                     }
-                    required
+                    required={stepForm.step_index > 1 || !stepForm.use_ai_generation}
                   />
                 </div>
               </CardContent>

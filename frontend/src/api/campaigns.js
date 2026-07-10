@@ -17,6 +17,14 @@ export const createCampaign = async (campaignData) => {
 };
 
 /**
+ * Generate AI Sequence (creates campaign + steps)
+ */
+export const generateAISequence = async (payload) => {
+  const response = await api.post('/api/campaigns/generate-sequence', payload);
+  return response.data;
+};
+
+/**
  * Get a single campaign by ID
  */
 export const getCampaign = async (campaignId) => {

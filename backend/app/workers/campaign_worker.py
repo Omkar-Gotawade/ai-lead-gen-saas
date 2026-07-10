@@ -11,7 +11,7 @@ from app.models.sequence_step import SequenceStep
 from app.models.lead import Lead
 from app.models.sending_log import SendingLog, SendStatus
 from app.workers.email_worker import send_email_task
-from app.services.ai_email_service import generate_email
+from app.services.ai_email_service import generate_email, generate_followup_email
 from app.services.lead_research_service import research_lead_with_status
 from app.services.audit_logger import AuditLogger
 from app.services.campaign_guard import enforce_campaign_send_limit
@@ -135,9 +135,15 @@ def render_template(template: str, lead: Lead) -> str:
     
     return result
 
+def render_template_with_sender(template: str, lead: Lead, sender_name: str) -> str:
+    """Render email template with lead data and sender name."""
+    result = render_template(template, lead)
+    result = result.replace("{{sender_name}}", sender_name or "")
+    return result
 
-@celery_app.task(name="run_sequence_step")
-def run_sequence_step(campaign_lead_id: str, step_index: int):
+
+@celery_app.task(name="run_sequence_step", bind=True)
+def run_sequence_step(self, campaign_lead_id: str, step_index: int):
     """
     Execute a specific sequence step for a campaign lead.
     
@@ -260,54 +266,76 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
         sender_name = user.full_name if user and user.full_name else (user.email.split('@')[0] if user else 'Your Company')
         
         # Generate email content (AI or template)
-        if step.use_ai_generation and step.product_description:
-            try:
-                logger.info(f"Generating AI email for lead {lead.id} using tone={step.ai_tone}, goal={step.ai_goal}")
-
-                # Research lead first so AI prompt has fresh personalization context.
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+        subject = render_template_with_sender(step.subject_template or "", lead, sender_name)
+        body = render_template_with_sender(step.body_template or "", lead, sender_name)
+        
+        if step_index == 1:
+            # Use AI only if enabled and we haven't exhausted our 3 retries.
+            # If we are on retry 3, we skip AI and fallback to the static template.
+            if step.use_ai_generation and self.request.retries < 3:
                 try:
+                    logger.info(f"Generating AI email for lead {lead.id} using tone={step.ai_tone}, goal={step.ai_goal}")
+                    
+                    # Research lead first so AI prompt has fresh personalization context.
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
                     try:
-                        researched_notes, _ = loop.run_until_complete(research_lead_with_status(lead))
-                        if researched_notes:
-                            lead.research_notes = researched_notes
-                            db.commit()
-                            db.refresh(lead)
-                            logger.info("Lead research completed before AI generation for %s", lead.id)
-                    except Exception as exc:
-                        logger.warning("Lead research failed for %s (continuing): %s", lead.id, exc)
+                        try:
+                            researched_notes, _ = loop.run_until_complete(research_lead_with_status(lead))
+                            if researched_notes:
+                                lead.research_notes = researched_notes
+                                db.commit()
+                                db.refresh(lead)
+                                logger.info("Lead research completed before AI generation for %s", lead.id)
+                        except Exception as exc:
+                            logger.warning("Lead research failed for %s (continuing): %s", lead.id, exc)
 
-                    # Generate personalized email using AI (run async function in sync context)
-                    generated = loop.run_until_complete(generate_email(
-                        lead=lead,
-                        sender_name=sender_name,
-                        tone=step.ai_tone or 'professional',
-                        goal=step.ai_goal or 'schedule a meeting',
-                        product_description=step.product_description
-                    ))
-                finally:
-                    loop.close()
-                
-                # Extract subject and body from GeneratedEmail object
-                subject = generated.subject
-                body = generated.body
-                
-                logger.info(f"AI generated email for {lead.email}: subject='{subject[:50]}...'")
-                
-            except Exception as e:
-                logger.error(f"AI generation failed for lead {lead.id}: {e}. Falling back to templates.")
-                # Fallback to templates if AI fails
-                subject = render_template(step.subject_template, lead)
-                body = render_template(step.body_template, lead)
+                        # Generate personalized email using AI (run async function in sync context)
+                        generated = loop.run_until_complete(generate_email(
+                            lead=lead,
+                            sender_name=sender_name,
+                            tone=step.ai_tone or 'professional',
+                            goal=step.ai_goal or 'schedule a meeting',
+                            product_description=step.product_description or ''
+                        ))
+                    finally:
+                        loop.close()
+                    
+                    # Extract subject and body from GeneratedEmail object
+                    subject = generated.subject
+                    body = generated.body
+                    
+                    logger.info(f"AI generated email for {lead.email}: subject='{subject[:50]}...'")
+                    
+                except Exception as e:
+                    logger.error(f"AI generation failed for lead {lead.id}: {e}. Falling back to templates.")
         else:
-            # Use template rendering (original behavior)
-            subject = render_template(step.subject_template, lead)
-            body = render_template(step.body_template, lead)
+            # Step 2+: Use static follow-up template (no AI generation)
+            body = render_template_with_sender(step.body_template or "", lead, sender_name)
+            
+            # Get root log for threading
+            root_log = (
+                db.query(SendingLog)
+                .filter(
+                    SendingLog.campaign_id == campaign.id,
+                    SendingLog.lead_id == lead.id,
+                    SendingLog.step_index == 1,
+                    SendingLog.status == SendStatus.SENT,
+                )
+                .order_by(SendingLog.sent_at.asc())
+                .first()
+            )
+            
+            if not root_log:
+                logger.info("Previous step email hasn't finished sending. Deferring follow-up for 60 seconds.")
+                raise self.retry(countdown=60)
+                
+            if root_log.subject:
+                subject = root_log.subject if str(root_log.subject).lower().startswith("re:") else f"Re: {root_log.subject}"
 
         analysis = analyze_email(
             email_body=body,
-            company_name=lead.company,
+            company_name=lead.company if step_index == 1 else None,
             bounce_rate=behavior["bounce_rate"],
             spam_rate=behavior["spam_rate"],
             spf_configured=domain_auth["spf_configured"],
@@ -315,8 +343,20 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
         )
 
         if not can_send_email(analysis):
+            # If the email was AI generated (step 1 only), we can retry generation up to 3 times
+            is_ai_generated_this_run = (step_index == 1 and step.use_ai_generation and self.request.retries < 3)
+            
+            if is_ai_generated_this_run:
+                logger.warning(
+                    "Blocked send for campaign_lead %s due to spam check: %s. Retrying AI generation (attempt %d/3).",
+                    campaign_lead.id,
+                    analysis["issues"],
+                    self.request.retries + 1
+                )
+                raise self.retry(countdown=10, max_retries=3)
+                
             campaign_lead.status = CampaignLeadStatus.STOPPED.value
-            campaign_lead.stop_reason = "spam_check_blocked"
+            campaign_lead.stop_reason = "spam_check_blocked" if not is_ai_generated_this_run else "spam_check_blocked_after_retries"
             db.commit()
             logger.warning(
                 "Blocked send for campaign_lead %s due to critical spam check: %s",
@@ -365,6 +405,10 @@ def run_sequence_step(campaign_lead_id: str, step_index: int):
                     "No root message_id found for campaign=%s lead=%s; sending step %d unthreaded",
                     campaign.id, lead.id, step_index,
                 )
+        else:
+            # Step 1: Assign a unique References header to break subject-based threading
+            # so that different campaigns with the same subject don't merge in Gmail.
+            references = f"<campaign-{campaign.id}-lead-{lead.id}@prosario.ai>"
 
         # Send email
         send_email_task.delay(

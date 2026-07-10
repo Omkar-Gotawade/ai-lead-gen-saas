@@ -9,12 +9,13 @@ class SequenceStepBase(BaseModel):
     """Base sequence step schema."""
     step_index: int
     delay_days: int = 0
-    subject_template: str
+    subject_template: Optional[str] = ""
     body_template: str
     use_ai_generation: bool = False
     ai_tone: Optional[str] = 'professional'
     ai_goal: Optional[str] = 'schedule a meeting'
     product_description: Optional[str] = None
+    is_ai_generated: bool = False
 
 
 class SequenceStepCreate(SequenceStepBase):
@@ -78,3 +79,19 @@ class CampaignResponse(CampaignBase):
 class CampaignWithSteps(CampaignResponse):
     """Campaign with its sequence steps."""
     steps: List[SequenceStepResponse] = []
+
+
+class GenerateSequenceRequest(BaseModel):
+    campaign_name: str
+    product_name: str
+    product_description: str
+    target_audience: str
+    campaign_goal: str
+    tone: str
+    number_of_steps: int
+
+
+class GenerateSequenceResponse(BaseModel):
+    campaign_id: UUID
+    campaign_name: str
+    steps: List[SequenceStepResponse]

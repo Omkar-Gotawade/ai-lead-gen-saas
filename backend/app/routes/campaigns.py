@@ -15,10 +15,14 @@ from app.schemas.campaign import (
     CampaignCreate,
     CampaignUpdate,
     CampaignResponse,
-    CampaignWithSteps
+    CampaignWithSteps,
+    GenerateSequenceRequest,
+    GenerateSequenceResponse,
+    SequenceStepResponse
 )
 from app.services.auth import get_current_user
 from app.services.rate_limiter import enforce_rate_limit
+from app.services.sequence_generation_agent import generate_sequence
 
 router = APIRouter()
 
@@ -79,6 +83,74 @@ async def create_campaign(
     db.refresh(db_campaign)
     
     return db_campaign
+
+
+@router.post("/campaigns/generate-sequence", response_model=GenerateSequenceResponse)
+async def generate_campaign_sequence(
+    request: GenerateSequenceRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate an AI sequence and create a new campaign.
+    """
+    enforce_rate_limit("ai_generate", str(current_user.id))
+
+    # Create campaign
+    db_campaign = Campaign(
+        user_id=current_user.id,
+        name=request.campaign_name,
+        description=f"AI Generated Sequence for {request.product_name}",
+        status=CampaignStatus.DRAFT,
+    )
+    
+    db.add(db_campaign)
+    db.commit()
+    db.refresh(db_campaign)
+
+    steps_created = []
+
+    try:
+        generated_steps = await generate_sequence(
+            product_name=request.product_name,
+            product_description=request.product_description,
+            target_audience=request.target_audience,
+            campaign_goal=request.campaign_goal,
+            tone=request.tone,
+            number_of_steps=request.number_of_steps
+        )
+        
+        for g_step in generated_steps:
+            db_step = SequenceStep(
+                campaign_id=db_campaign.id,
+                step_index=g_step.step,
+                delay_days=0 if g_step.step == 1 else 3,
+                subject_template=g_step.subject,
+                body_template=g_step.body,
+                use_ai_generation=False, # We used AI to build the campaign, but not per-lead personalized here unless chosen later
+                is_ai_generated=True,
+                ai_goal=g_step.purpose
+            )
+            db.add(db_step)
+            steps_created.append(db_step)
+            
+        db.commit()
+        for step in steps_created:
+            db.refresh(step)
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to generate AI sequence: {e}")
+        # Don't fail the request, return the campaign with 0 steps
+        # User will be directed to the editor and can add steps manually
+
+    return GenerateSequenceResponse(
+        campaign_id=db_campaign.id,
+        campaign_name=db_campaign.name,
+        steps=[SequenceStepResponse.from_orm(step) for step in steps_created]
+    )
+
 
 
 @router.get("/campaigns/{campaign_id}", response_model=CampaignWithSteps)

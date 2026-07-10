@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
 import enum
+from sqlalchemy import Boolean
 
 from app.database import Base
 
@@ -26,6 +27,6 @@ class Campaign(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     status = Column(SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT, nullable=False)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

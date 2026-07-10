@@ -69,10 +69,13 @@ def send_smtp_email(
     outgoing_message_id = _make_message_id(settings.from_email)
     msg["Message-ID"] = outgoing_message_id
 
-    # Attach threading headers when this is a follow-up
+    # Attach threading headers
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
-        msg["References"] = references or in_reply_to
+    if references:
+        msg["References"] = references
+    elif in_reply_to:
+        msg["References"] = in_reply_to
 
     part = MIMEText(body, "plain")
     msg.attach(part)
@@ -139,8 +142,11 @@ def send_sendgrid_email(
     message.header = Header("Message-ID", outgoing_message_id)
 
     if in_reply_to:
-        message.header = Header("In-Reply-To", in_reply_to)
-        message.header = Header("References", references or in_reply_to)
+        message.add_header(Header("In-Reply-To", in_reply_to))
+        
+    refs = references or in_reply_to
+    if refs:
+        message.add_header(Header("References", refs))
 
     try:
         sg = SendGridAPIClient(api_key)
