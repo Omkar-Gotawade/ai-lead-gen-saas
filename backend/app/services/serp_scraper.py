@@ -80,36 +80,64 @@ class SerpScraper:
         # Build search query
         query = self._build_search_query(keywords, location, industry)
         
-        try:
-            # Call SerpAPI
-            params = {
-                "q": query,
-                "api_key": self.serp_api_key,
-                "num": min(max_results, 100),  # SerpAPI limit
-                "engine": "google"
-            }
-            
-            response = requests.get("https://serpapi.com/search", params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            # Extract organic results
-            results = []
-            for result in data.get("organic_results", [])[:max_results]:
-                domain = self._extract_domain(result.get("link", ""))
-                if domain:
-                    results.append({
-                        "domain": domain,
-                        "source_url": result.get("link", "")
-                    })
-            
-            logger.info(f"SerpAPI search found {len(results)} domains for query: {query}")
-            return results
-            
-        except Exception as e:
-            logger.error(f"SerpAPI search failed: {str(e)}")
-            # Fallback to scraping
-            return self._search_with_google_scraping(keywords, location, industry, max_results)
+        results = []
+        
+        # SerpAPI supports pagination using 'start' parameter
+        start = 0
+        while start < 500:
+            try:
+                # Call SerpAPI
+                params = {
+                    "q": query,
+                    "api_key": self.serp_api_key,
+                    "num": 100,  # Try to ask for 100
+                    "start": start,
+                    "engine": "google"
+                }
+                
+                response = requests.get("https://serpapi.com/search", params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                
+                organic_results = data.get("organic_results", [])
+                if not organic_results:
+                    # No more results
+                    break
+                    
+                added_this_page = 0
+                
+                # Extract organic results
+                for result in organic_results:
+                    domain = self._extract_domain(result.get("link", ""))
+                    if domain and not self._is_excluded_domain(domain):
+                        if not any(r['domain'] == domain for r in results):
+                            results.append({
+                                "domain": domain,
+                                "source_url": result.get("link", "")
+                            })
+                            added_this_page += 1
+                            
+                            if len(results) >= max_results:
+                                break
+                
+                logger.info(f"SerpAPI page start={start} found {len(organic_results)} raw organic results, {added_this_page} valid domains. Total: {len(results)}/{max_results}")
+                
+                if len(results) >= max_results:
+                    break
+                    
+                # Google might return fewer than requested (e.g. 8 or 10 even if num=100 is passed)
+                # We need to advance start by the number of organic results we received, or at least 10
+                # to prevent infinite loops on the same page.
+                start += max(len(organic_results), 10)
+                
+            except Exception as e:
+                logger.error(f"SerpAPI search failed at start={start}: {str(e)}")
+                # Fallback to scraping if we have no results yet
+                if not results:
+                    return self._search_with_google_scraping(keywords, location, industry, max_results)
+                break
+                
+        return results
     
     def _search_with_google_scraping(
         self,
@@ -134,52 +162,67 @@ class SerpScraper:
         """
         # Build search query
         query = self._build_search_query(keywords, location, industry)
-        
-        # Build Google search URL
         encoded_query = quote_plus(query)
-        search_url = f"https://www.google.com/search?q={encoded_query}&num={min(max_results, 100)}"
         
-        try:
-            # Make request
-            headers = {"User-Agent": self.user_agent}
-            response = requests.get(search_url, headers=headers, timeout=15)
-            response.raise_for_status()
+        results = []
+        
+        # Paginate to find enough valid domains (Google returns ~10 per page)
+        # We'll check up to 10 pages to avoid getting blocked while ensuring we get enough
+        for start in range(0, 100, 10):
+            search_url = f"https://www.google.com/search?q={encoded_query}&start={start}"
             
-            # Parse HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extract search result links
-            results = []
-            
-            # Find all search result divs (Google's structure changes frequently)
-            # This selector targets the main result links
-            for g in soup.find_all('div', class_='g'):
-                # Find the link
-                link_tag = g.find('a')
-                if link_tag and link_tag.get('href'):
-                    url = link_tag['href']
-                    domain = self._extract_domain(url)
-                    
-                    if domain and not self._is_excluded_domain(domain):
-                        results.append({
-                            "domain": domain,
-                            "source_url": url
-                        })
+            try:
+                # Make request
+                headers = {"User-Agent": self.user_agent}
+                response = requests.get(search_url, headers=headers, timeout=15)
+                response.raise_for_status()
+                
+                # Parse HTML
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                added_this_page = 0
+                
+                # Find all search result divs (Google's structure changes frequently)
+                # This selector targets the main result links
+                for g in soup.find_all('div', class_='g'):
+                    # Find the link
+                    link_tag = g.find('a')
+                    if link_tag and link_tag.get('href'):
+                        url = link_tag['href']
+                        domain = self._extract_domain(url)
                         
-                        if len(results) >= max_results:
-                            break
-            
-            logger.info(f"Google scraping found {len(results)} domains for query: {query}")
-            
-            # Add delay to avoid rate limiting
-            time.sleep(2)
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Google scraping failed: {str(e)}")
-            # Fallback to demo domains for testing
+                        if domain and not self._is_excluded_domain(domain):
+                            if not any(r['domain'] == domain for r in results):
+                                results.append({
+                                    "domain": domain,
+                                    "source_url": url
+                                })
+                                added_this_page += 1
+                                
+                                if len(results) >= max_results:
+                                    break
+                
+                logger.info(f"Google scraping page start={start} found {added_this_page} valid domains. Total: {len(results)}/{max_results}")
+                
+                if len(results) >= max_results:
+                    break
+                    
+                if added_this_page == 0 and start > 0:
+                    # If we found no new valid domains on this page, we might have hit the end
+                    break
+                    
+                # Add delay to avoid rate limiting between pages
+                time.sleep(2)
+                
+            except Exception as e:
+                logger.error(f"Google scraping failed at start={start}: {str(e)}")
+                break
+                
+        if not results:
+            logger.warning("Google scraping yielded 0 results. Fallback to demo domains.")
             return self._get_demo_domains(keywords, industry, max_results)
+            
+        return results
     
     def _build_search_query(
         self,
@@ -251,7 +294,11 @@ class SerpScraper:
         excluded = [
             'google.com', 'facebook.com', 'linkedin.com', 'twitter.com',
             'youtube.com', 'wikipedia.org', 'instagram.com', 'reddit.com',
-            'amazon.com', 'apple.com', 'microsoft.com', 'github.com'
+            'amazon.com', 'apple.com', 'microsoft.com', 'github.com',
+            'clutch.co', 'g2.com', 'capterra.com', 'crunchbase.com',
+            'upwork.com', 'fiverr.com', 'indeed.com', 'glassdoor.com',
+            'tiktok.com', 'medium.com', 'pinterest.com', 'quora.com',
+            'yahoo.com', 'trustpilot.com', 'yelp.com', 'forbes.com', 'bloomberg.com'
         ]
         
         return any(domain.endswith(excluded_domain) for excluded_domain in excluded)

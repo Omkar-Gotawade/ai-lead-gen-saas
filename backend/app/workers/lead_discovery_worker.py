@@ -1,4 +1,4 @@
-﻿"""Celery worker for Lead Discovery.
+"""Celery worker for Lead Discovery.
 
 Pipeline priority:
   1. Apollo.io People Search   - if APOLLO_API_KEY is set (falls through if 403/0 results)
@@ -14,6 +14,7 @@ from datetime import datetime
 import uuid
 import json
 import logging
+import re
 
 from ..database import SessionLocal
 from ..models.lead_discovery_job import LeadDiscoveryJob
@@ -45,6 +46,55 @@ _GENERIC_LOCAL_PARTS = frozenset({
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _normalize_company_name(name: str) -> str:
+    if not name:
+        return ""
+    name = name.lower()
+    suffixes = [
+        r'\bllc\b', r'\bpvt\s+ltd\b', r'\binc\b', r'\blimited\b', 
+        r'\btechnologies\b', r'\bsolutions\b', r'\bcorp\b', r'\bgroup\b',
+        r'\bco\b', r'\bltd\b'
+    ]
+    for suffix in suffixes:
+        name = re.sub(suffix, '', name)
+    name = re.sub(r'[^a-z0-9]', '', name)
+    return name
+
+def _get_title_priority(title: str) -> int:
+    if not title:
+        return 99
+    title = title.lower()
+    if 'founder' in title and 'co' not in title: return 1
+    if 'co-founder' in title or 'cofounder' in title: return 2
+    if 'ceo' in title or 'chief executive' in title: return 3
+    if 'owner' in title: return 4
+    if 'president' in title: return 5
+    if 'vp' in title or 'vice president' in title: return 6
+    if 'director' in title: return 7
+    if 'head' in title: return 8
+    if 'manager' in title: return 9
+    return 10
+
+def _deduplicate_and_filter_leads(people: list, max_results: int) -> list:
+    """Group by company, select highest authority, limit to max_results."""
+    company_groups = {}
+    
+    for person in people:
+        company = person.get("company") or person.get("company_domain") or ""
+        normalized_company = _normalize_company_name(company)
+        key = normalized_company if normalized_company else company.lower()
+        
+        if key not in company_groups:
+            company_groups[key] = []
+        company_groups[key].append(person)
+        
+    unique_leads = []
+    for key, group in company_groups.items():
+        group.sort(key=lambda p: _get_title_priority(p.get("title", "")))
+        unique_leads.append(group[0])
+        
+    return unique_leads[:max_results]
+
 def _person_to_lead(db, person, job):
     """Persist a person dict as a Lead. Returns True if a new lead was created."""
     email = (person.get("email") or "").strip().lower()
@@ -53,6 +103,16 @@ def _person_to_lead(db, person, job):
     if db.query(Lead).filter(Lead.email == email).first():
         logger.debug("Lead already exists for %s", email)
         return False
+        
+    company = person.get("company") or person.get("company_domain") or ""
+    normalized_company = _normalize_company_name(company)
+    
+    if normalized_company:
+        existing_companies = [c[0] for c in db.query(Lead.company).filter(Lead.org_id == job.org_id, Lead.company.isnot(None)).all()]
+        for ec in existing_companies:
+            if _normalize_company_name(ec) == normalized_company:
+                logger.debug("Lead already exists for company %s", company)
+                return False
     first = person.get("first_name") or email.split("@")[0].split(".")[0].capitalize()
     last = person.get("last_name") or ""
     enriched_data = {
@@ -187,7 +247,7 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
         if serp_key and (hunter_key or apify_token):
             result = _serp_business_leads_pipeline(
                 job=job,
-                max_results=max_results,
+                max_results=max(30, max_results * 3),
                 serp_api_key=serp_key,
                 hunter_api_key=hunter_key,
                 zenrows_api_key=zenrows_key,
@@ -201,7 +261,7 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
 
         # --- Pipeline 1: People Data Labs ---
         if pdl_key:
-            result = _pdl_pipeline(job, pdl_key, max_results)
+            result = _pdl_pipeline(job, pdl_key, max(30, max_results * 3))
             if result:
                 people, pipeline = result, "pdl"
             else:
@@ -209,7 +269,7 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
 
         # --- Pipeline 2: Icypeas (Gmail OK, 5k free/mo) ---
         if people is None and icypeas_key:
-            result = _icypeas_pipeline(job, icypeas_key, max_results)
+            result = _icypeas_pipeline(job, icypeas_key, max(30, max_results * 3))
             if result:
                 people, pipeline = result, "icypeas"
             else:
@@ -217,7 +277,7 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
 
         # --- Pipeline 3: Apollo.io (paid API plan) ---
         if people is None and apollo_key:
-            result = _apollo_pipeline(job, apollo_key, max_results)
+            result = _apollo_pipeline(job, apollo_key, max(30, max_results * 3))
             if result:
                 people, pipeline = result, "apollo"
             else:
@@ -225,7 +285,7 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
 
         # --- Pipeline 4: Snov.io ---
         if people is None and snov_id and snov_secret:
-            result = _snov_pipeline(job, snov_id, snov_secret, max_results)
+            result = _snov_pipeline(job, snov_id, snov_secret, max(30, max_results * 3))
             if result:
                 people, pipeline = result, "snov"
 
@@ -242,6 +302,10 @@ def run_lead_discovery(self, job_id: str, max_results: int = 25):
 
         # --- People-based pipeline: store previews + create leads ---
         logger.info("Pipeline %r returned %d people", pipeline, len(people))
+        
+        people = _deduplicate_and_filter_leads(people, max_results)
+        logger.info("After deduplication: %d unique companies", len(people))
+        
         job.domains_found = len(people)
         db.commit()
 
@@ -290,13 +354,14 @@ def _icypeas_pipeline(job, api_key, max_results):
         keywords=job.keywords,
         location=job.location,
         industry=job.industry,
-        max_results=min(max_results, 20),
+        max_results=100,
     )
     icypeas = IcypeasService(api_key=api_key)
     people = []
     per_domain = max(3, max_results // max(len(domains), 1))
     for d in domains:
-        if len(people) >= max_results:
+        unique_domains_found = len(set(p.get("company_domain") or p.get("company", "") for p in people))
+        if unique_domains_found >= max_results:
             break
         domain = d.get("domain", "")
         if domain:
@@ -305,7 +370,7 @@ def _icypeas_pipeline(job, api_key, max_results):
                 company=d.get("company_name", ""),
                 limit=per_domain,
             ))
-    return people[:max_results]
+    return people
 
 
 def _pdl_pipeline(job, api_key, max_results):
@@ -338,18 +403,19 @@ def _snov_pipeline(job, client_id, client_secret, max_results):
         keywords=job.keywords,
         location=job.location,
         industry=job.industry,
-        max_results=min(max_results, 20),
+        max_results=100,
     )
     snov = SnovService(client_id=client_id, client_secret=client_secret)
     people = []
     per_domain = max(3, max_results // max(len(domains), 1))
     for d in domains:
-        if len(people) >= max_results:
+        unique_domains_found = len(set(p.get("company_domain") or p.get("company", "") for p in people))
+        if unique_domains_found >= max_results:
             break
         domain = d.get("domain", "")
         if domain:
             people.extend(snov.domain_search(domain=domain, limit=per_domain))
-    return people[:max_results]
+    return people
 
 
 def _serp_crawl_pipeline(job, max_results, db):
@@ -472,7 +538,7 @@ def _serp_business_leads_pipeline(
         keywords=job.keywords,
         location=job.location,
         industry=job.industry,
-        max_results=min(max_results * 2, 50),
+        max_results=100,
     )
     if not domains:
         return []
@@ -497,7 +563,8 @@ def _serp_business_leads_pipeline(
     per_domain_limit = max(2, min(8, (max_results // max(len(domains), 1)) + 1))
 
     for domain_row in domains:
-        if len(people) >= max_results:
+        unique_domains_found = len(set(p.get("company_domain") or p.get("company", "") for p in people))
+        if unique_domains_found >= max_results:
             break
 
         domain = (domain_row.get("domain") or "").strip().lower()
@@ -535,9 +602,6 @@ def _serp_business_leads_pipeline(
             raw_people = []
 
         for person in raw_people:
-            if len(people) >= max_results:
-                break
-
             email = (person.get("email") or "").strip().lower()
 
             # If Apify provided no direct email, generate candidates and validate.
@@ -590,4 +654,4 @@ def _serp_business_leads_pipeline(
             person["source"] = "serp+hunter"
             people.append(person)
 
-    return people[:max_results]
+    return people

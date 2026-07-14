@@ -338,7 +338,7 @@ export default function DiscoverLeadsPage() {
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="p-3 bg-ink-50 rounded-lg">
-                    <p className="text-xs text-ink-500 mb-1">{peoplePipeline ? "People Found" : "Domains Found"}</p>
+                    <p className="text-xs text-ink-500 mb-1">{peoplePipeline ? "Unique Companies Found" : "Domains Found"}</p>
                     <p className="font-semibold text-ink-900 text-lg">{jobStatus.job.domains_found}</p>
                   </div>
                   <div className="p-3 bg-ink-50 rounded-lg">
