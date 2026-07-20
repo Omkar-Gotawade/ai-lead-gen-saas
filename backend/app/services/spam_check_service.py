@@ -45,7 +45,19 @@ def _mentions_company(body: str, company_name: str) -> bool:
 
     body_norm = _normalize_for_match(body_lower)
     company_norm = _normalize_for_match(company_lower)
-    return bool(company_norm and company_norm in body_norm)
+    if company_norm and company_norm in body_norm:
+        return True
+        
+    # Fallback: check if the primary word (first significant word) is in the body
+    # This handles when the DB has "Razorpay Software Inc" but AI wrote "Razorpay"
+    ignore_words = {'the', 'a', 'an', 'inc', 'llc', 'corp', 'ltd', 'limited', 'co', 'company'}
+    words = [w for w in re.split(r'\W+', company_lower) if w and w not in ignore_words]
+    if words:
+        primary_word = words[0]
+        if len(primary_word) > 2 and primary_word in body_lower:
+            return True
+            
+    return False
 
 
 def calculate_spam_score(issues: List[str]) -> Tuple[int, str]:

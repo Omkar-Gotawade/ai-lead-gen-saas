@@ -1,4 +1,6 @@
 """Redis service for deduplication and caching."""
+import json
+import re
 import redis
 from typing import Optional
 import hashlib
@@ -6,6 +8,15 @@ import logging
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+RESEARCH_CACHE_TTL = 604800  # 7 days in seconds
+
+
+def _slugify_company(company: str) -> str:
+    """Convert company name to a safe Redis key segment."""
+    slug = company.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")[:80]
 
 
 class RedisService:
@@ -149,3 +160,56 @@ class RedisService:
         except Exception as e:
             logger.error(f"Redis error counting messages: {e}")
             return 0
+
+    # -----------------------------------------------------------------------
+    # Company research cache (7-day TTL)
+    # -----------------------------------------------------------------------
+
+    @classmethod
+    def get_research_cache(cls, company: str) -> Optional[dict]:
+        """Return cached buying-signal research for a company, or None.
+
+        Args:
+            company: Company name (used to build cache key)
+
+        Returns:
+            Parsed dict if a fresh cache entry exists, else None.
+        """
+        client = cls.get_client()
+        if not client:
+            return None
+
+        key = f"research:company:{_slugify_company(company)}"
+        try:
+            raw = client.get(key)
+            if raw:
+                logger.info("Research cache HIT for company: %s", company)
+                return json.loads(raw)
+        except Exception as exc:
+            logger.warning("Redis error reading research cache for %s: %s", company, exc)
+        return None
+
+    @classmethod
+    def set_research_cache(
+        cls,
+        company: str,
+        data: dict,
+        ttl_seconds: int = RESEARCH_CACHE_TTL,
+    ) -> None:
+        """Store buying-signal research for a company in Redis.
+
+        Args:
+            company:     Company name (used to build cache key)
+            data:        Structured research dict to serialise as JSON
+            ttl_seconds: Time-to-live (default 7 days)
+        """
+        client = cls.get_client()
+        if not client:
+            return
+
+        key = f"research:company:{_slugify_company(company)}"
+        try:
+            client.set(key, json.dumps(data), ex=ttl_seconds)
+            logger.info("Research cache SET for company: %s (TTL %ds)", company, ttl_seconds)
+        except Exception as exc:
+            logger.warning("Redis error writing research cache for %s: %s", company, exc)

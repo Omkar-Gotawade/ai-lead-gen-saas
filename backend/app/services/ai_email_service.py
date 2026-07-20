@@ -524,6 +524,11 @@ Industry: {industry}
 Company size: {company_size}
 Location: {location}
 
+RESEARCHED BUYING SIGNAL (highest priority — this is a REAL, specific fact about the company):
+{best_email_opener}
+
+BUYING SIGNAL TYPE: {recommended_email_angle}
+
 RESEARCH NOTES (from Gemini research agent — use these to personalize):
 {research_notes}
 
@@ -538,7 +543,11 @@ Selected subject line: {subject}
 EMAIL STRUCTURE — follow this exactly:
 Hi {first_name},
 [blank line]
-Line 1: One specific observation from the research. Saw / Noticed / Was looking at / Quick question...
+Line 1: MUST use the RESEARCHED BUYING SIGNAL above as your opener if it is specific and non-empty.
+        Adapt the wording naturally — e.g. "Saw {company} recently partnered with NVIDIA...",
+        "Congrats on the Series A...", "Noticed you're expanding into Europe..."
+        If the buying signal is empty or generic, write your own specific observation from the research notes.
+        NEVER start with "I noticed your company" or generic openers.
 [blank line]
 Line 2: Connect it naturally to a real problem they likely face. One sentence.
 [blank line]
@@ -560,12 +569,13 @@ WRITING STYLE:
 GOOD OPENER PHRASES (use similar patterns):
 "Saw your team recently expanded..."
 "Noticed you're hiring a few SDRs..."
-"Was looking at {company}'s stack..."
-"Saw the LinkedIn post about..."
-"Quick question about how you're handling..."
+"Congrats on the Series A..."
+"Saw the partnership announcement with..."
+"Was reading your recent blog post about..."
 
 NEVER USE:
 - "I hope this email finds you well"
+- "I noticed your company"
 - "Given your focus on"
 - "I was impressed by"
 - "I came across"
@@ -587,8 +597,8 @@ Alex
 
 GOOD EMAIL (write like this):
 Hi John,
-Saw your team recently expanded after launching the new product.
-Usually at that stage keeping outreach organized gets harder as more prospects come in.
+Saw TCS recently partnered with NVIDIA to build an industrial metaverse center.
+At that scale, coordinating outbound across a growing sales team gets messy fast.
 We help teams find and contact the right leads without spending hours manually.
 Worth a quick chat?
 Omkar
@@ -603,6 +613,49 @@ def _count_body_words(body: str) -> int:
     sig_pattern = re.compile(r"\n\s*\w+\s*$")
     cleaned = sig_pattern.sub("", body).strip()
     return len(cleaned.split())
+
+
+def _get_buying_signal_context(lead: Lead) -> tuple[str, str]:
+    """Extract best_email_opener and recommended_email_angle from structured research.
+
+    Priority:
+        1. recommended_signal (4-dimension weighted rank #1) — highest quality
+        2. best_email_openers[0] (Gemini-generated, pre-ranked)
+        3. best_email_opener (legacy single field)
+
+    Returns:
+        (best_email_opener, recommended_email_angle)
+        Both may be empty strings if not available.
+    """
+    try:
+        enriched = lead.enriched_data if isinstance(lead.enriched_data, dict) else {}
+        bsr = enriched.get("buying_signals_result")
+        if not isinstance(bsr, dict):
+            return "", ""
+
+        angle = (bsr.get("recommended_email_angle") or "").strip()
+
+        # Prefer the headline of the weighted rank-#1 recommended_signal
+        rec = bsr.get("recommended_signal")
+        if isinstance(rec, dict):
+            # Use the pre-built openers list whose #1 is calibrated to recommended_signal
+            openers = bsr.get("best_email_openers") or []
+            opener = (openers[0] if openers else "").strip()
+            if not opener:
+                # Build a quick opener from the signal headline
+                headline = (rec.get("headline") or "").strip()
+                if headline:
+                    opener = f"Saw {headline}"
+            if opener:
+                return opener, angle
+
+        # Fallback: plain best_email_opener (backward-compat)
+        opener = (bsr.get("best_email_opener") or "").strip()
+        return opener, angle
+
+    except Exception:
+        pass
+    return "", ""
 
 
 def _run_copywriter_agent(
@@ -634,6 +687,23 @@ def _run_copywriter_agent(
         else "No enrichment signals available."
     )
 
+    # Pull the structured buying signal opener (highest priority context)
+    best_email_opener, recommended_email_angle = _get_buying_signal_context(lead)
+
+    # If no structured opener, extract the best line from research notes as fallback
+    if not best_email_opener and research_notes:
+        for line in research_notes.splitlines():
+            cleaned = line.strip()
+            # Skip meta-lines like "BUYING SIGNALS:" or "COMPANY:" headers
+            if cleaned and not cleaned.startswith(("BEST OPENER:", "EMAIL ANGLE:", "BUYING SIGNALS", "COMPANY:", "PRODUCTS", "Research fallback", "[", "-")):
+                best_email_opener = cleaned[:300]
+                break
+        # Also check for explicitly labelled BEST OPENER line
+        for line in research_notes.splitlines():
+            if line.strip().startswith("BEST OPENER:"):
+                best_email_opener = line.strip().removeprefix("BEST OPENER:").strip()
+                break
+
     prompt = _COPYWRITER_AGENT_PROMPT_TEMPLATE.format(
         first_name=first_name,
         last_name=last_name,
@@ -642,6 +712,8 @@ def _run_copywriter_agent(
         industry=industry,
         company_size=company_size,
         location=location,
+        best_email_opener=best_email_opener or "No specific buying signal found — use research notes to create a natural opener.",
+        recommended_email_angle=recommended_email_angle or "general",
         research_notes=notes_text,
         enrichment_signals=enrichment_text,
         product_description=product_description,

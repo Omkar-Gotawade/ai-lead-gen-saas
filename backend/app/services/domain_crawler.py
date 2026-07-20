@@ -22,8 +22,31 @@ logger = logging.getLogger(__name__)
 class DomainCrawler:
     """Crawler for extracting company information from websites."""
     
-    # Common pages to crawl for company info
+    # Core pages to crawl for company info
     PAGES_TO_CRAWL = ['/', '/about', '/about-us', '/contact', '/contact-us']
+
+    # Signal-rich pages — crawled specifically for buying signal extraction
+    SIGNAL_PAGES = [
+        ('home',         '/'),
+        ('about',        '/about'),
+        ('about',        '/about-us'),
+        ('blog',         '/blog'),
+        ('blog',         '/news'),
+        ('press',        '/press'),
+        ('press',        '/press-releases'),
+        ('press',        '/media'),
+        ('careers',      '/careers'),
+        ('careers',      '/jobs'),
+        ('careers',      '/join-us'),
+        ('products',     '/products'),
+        ('products',     '/solutions'),
+        ('services',     '/services'),
+        ('case_studies', '/case-studies'),
+        ('case_studies', '/customers'),
+        ('partners',     '/partners'),
+        ('partners',     '/partnerships'),
+        ('investors',    '/investors'),
+    ]
     
     # Email regex pattern
     EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -302,15 +325,87 @@ class DomainCrawler:
         return any(pattern in email_lower for pattern in excluded_patterns)
 
 
-# Convenience function
+    def crawl_for_signals(self, domain: str) -> Dict[str, any]:
+        """Crawl signal-rich pages on a domain and return structured section text.
+
+        Returns a dict keyed by section type (home, blog, press, careers, etc.)
+        with the cleaned text for each successfully fetched page.  Individual
+        page failures are silently skipped — the caller always gets a (possibly
+        empty) dict.
+
+        Args:
+            domain: Company domain, e.g. "acme.com" or "https://acme.com"
+
+        Returns:
+            {
+                "home": "...",
+                "blog": "...",
+                "press": "...",
+                "careers": "...",
+                "products": "...",
+                ...
+                "domain": "acme.com",
+                "success": True,
+            }
+        """
+        # Normalise domain
+        if not domain.startswith('http'):
+            domain = f"https://{domain}"
+        parsed = urlparse(domain)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        clean_domain = parsed.netloc.lstrip('www.')
+
+        sections: Dict[str, list] = {}
+        seen_urls: set = set()
+
+        for section, path in self.SIGNAL_PAGES:
+            page_url = urljoin(base_url, path)
+            if page_url in seen_urls:
+                continue
+            seen_urls.add(page_url)
+
+            try:
+                result = self._crawl_page(page_url)
+                if result.get('success') and result.get('text'):
+                    sections.setdefault(section, []).append(result['text'])
+                time.sleep(0.3)
+            except Exception as exc:
+                logger.debug("Signal crawl skipped %s: %s", page_url, exc)
+                continue
+
+        # Merge text per section (multiple paths may map to same section)
+        merged: Dict[str, any] = {
+            section: '\n\n'.join(texts)[:6000]  # cap per section
+            for section, texts in sections.items()
+            if texts
+        }
+        merged['domain'] = clean_domain
+        merged['success'] = bool(merged)
+        return merged
+
+
+# Convenience functions
 def crawl_domain(domain: str) -> Dict[str, any]:
     """Convenience function to crawl a domain.
-    
+
     Args:
         domain: Domain to crawl
-        
+
     Returns:
         Extracted information dict
     """
     crawler = DomainCrawler()
     return crawler.crawl_domain(domain)
+
+
+def crawl_for_signals(domain: str) -> Dict[str, any]:
+    """Convenience function: crawl signal-rich pages on a company domain.
+
+    Args:
+        domain: Company domain, e.g. "acme.com"
+
+    Returns:
+        Dict of section → cleaned text, plus 'domain' and 'success' keys.
+    """
+    crawler = DomainCrawler()
+    return crawler.crawl_for_signals(domain)
